@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>Spanish.html</h1>
+    <p>Report generated on 29-May-2021 at 16:19:37 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk-11.0.10</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "0.13.1", "py": "1.10.0", "pytest": "6.2.3"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19041-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "metadata": "1.11.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.9.4</td></tr></table>
+    <h2>Summary</h2>
+    <p>12 tests ran in 2910.31 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">9 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">3 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">ConfigurationApp_Spanish/test_ConfigurationApp_Spanish.py::test_ConfigurationApp_Spanish</td>
+          <td class="col-duration">77.31</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_ConfigurationApp_Spanish():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>    <br/>        voice_commands(&quot;Navigate Home&quot;,&quot;Regresar a inicio&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;,&quot;Mis programas&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Configuration&quot;,&quot;Ajustes&quot;)<br/>        time.sleep(2)<br/>    <br/>    #def test_ConfigurationAppZoomLevels():<br/>        voice_commands(&quot;Zoom Level 2&quot;,&quot;Nivel de zoom 2&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Zoom Level 3&quot;,&quot;Nivel de zoom 3&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Zoom Level 4&quot;,&quot;Nivel de zoom 4&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Zoom Level 5&quot;,&quot;Nivel de zoom 5&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Zoom Level 1&quot;,&quot;Nivel de zoom 1&quot;)<br/>        time.sleep(2)<br/>    <br/>    #def test_ConfigurationAppFlashlight():<br/>        voice_commands(&quot;Flashlight On&quot;,&quot;Encender Linterna&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Flashlight Off&quot;,&quot;Apagar Linterna&quot;)<br/>        time.sleep(2)<br/>    #def test_ConfigurationAppGobalCommands():<br/>        voice_commands(&quot;Show Help&quot;,&quot;Mostrar Ayuda&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;Hide Help&quot;,&quot;Ocultar Ayuda&quot;)<br/><br/>ConfigurationApp_Spanish\test_ConfigurationApp_Spanish.py:149: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;Hide Help&#x27;, text_log = &#x27;Ocultar Ayuda&#x27;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;&quot;+time_stamp_screenshot+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text_log+&quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text_log+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;hide help&#x27;</span><br/><span class="error">E             - hide help</span><br/><br/>ConfigurationApp_Spanish\test_ConfigurationApp_Spanish.py:94: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Regresar a inicio -&gt; PASS
+Mis programas -&gt; PASS
+Ajustes -&gt; PASS
+Nivel de zoom 2 -&gt; PASS
+Nivel de zoom 3 -&gt; PASS
+Nivel de zoom 4 -&gt; PASS
+Nivel de zoom 5 -&gt; PASS
+Nivel de zoom 1 -&gt; PASS
+Encender Linterna -&gt; PASS
+Apagar Linterna -&gt; PASS
+Mostrar Ayuda -&gt; PASS
+Ocultar Ayuda -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">GlobalCommands_Spanish/test_GlobalCommands_Spanish.py::test_GlobalCommands_Spanish</td>
+          <td class="col-duration">351.82</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_GlobalCommands_Spanish():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        #Gobal commands<br/>        voice_commands(&quot;Navigate Home&quot;,&quot;Regresar a inicio&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Help&quot;,&quot;Mostrar Ayuda&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Help&quot;,&quot;Ocultar Ayuda&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Notifications&quot;,&quot;Mostrar notificaciones&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Notifications&quot;,&quot;Ocultar notificaciones&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Controls&quot;,&quot;Mis controles&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Ir atrás&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Recent Applications&quot;,&quot;Aplicaciones recientes&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Home&quot;,&quot;Regresar a inicio&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;,&quot;Mis programas&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Help&quot;, &quot;Mostrar Ayuda&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Help&quot;, &quot;Ocultar Ayuda&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Notifications&quot;, &quot;Mostrar notificaciones&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Notifications&quot;, &quot;Ocultar notificaciones&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Controls&quot;, &quot;Mis controles&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;, &quot;Ir atrás&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Recent Applications&quot;, &quot;Aplicaciones recientes&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Home&quot;,&quot;Regresar a inicio&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;,&quot;Mis programas&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;About Device&quot;,&quot;Acerca de dispositivo&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Help&quot;, &quot;Mostrar Ayuda&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Help&quot;, &quot;Ocultar Ayuda&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Notifications&quot;, &quot;Mostrar notificaciones&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Notifications&quot;, &quot;Ocultar notificaciones&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Controls&quot;, &quot;Mis controles&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;, &quot;Ir atrás&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Recent Applications&quot;, &quot;Aplicaciones recientes&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Home&quot;, &quot;Regresar a inicio&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;, &quot;Mis programas&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Audio Recorder&quot;,&quot;Grabador de audio&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Help&quot;, &quot;Mostrar Ayuda&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Help&quot;, &quot;Ocultar Ayuda&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Notifications&quot;, &quot;Mostrar notificaciones&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Notifications&quot;, &quot;Ocultar notificaciones&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Controls&quot;, &quot;Mis controles&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;, &quot;Ir atrás&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Recent Applications&quot;, &quot;Aplicaciones recientes&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Home&quot;, &quot;Regresar a inicio&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;, &quot;Mis programas&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Barcode Reader&quot;,&quot;Lector de Código de Barras&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Help&quot;, &quot;Mostrar Ayuda&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Help&quot;, &quot;Ocultar Ayuda&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Notifications&quot;, &quot;Mostrar notificaciones&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Notifications&quot;, &quot;Ocultar notificaciones&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Controls&quot;, &quot;Mis controles&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;, &quot;Ir atrás&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Recent Applications&quot;, &quot;Aplicaciones recientes&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Home&quot;, &quot;Regresar a inicio&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;, &quot;Mis programas&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Cloud sync&quot;,&quot;SINCRONIZACIÓN EN LA NUBE&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Help&quot;, &quot;Mostrar Ayuda&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Help&quot;, &quot;Ocultar Ayuda&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Notifications&quot;, &quot;Mostrar notificaciones&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Notifications&quot;, &quot;Ocultar notificaciones&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Controls&quot;, &quot;Mis controles&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;, &quot;Ir atrás&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Recent Applications&quot;, &quot;Aplicaciones recientes&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Home&quot;, &quot;Regresar a inicio&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;, &quot;Mis programas&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Configuration&quot;,&quot;Ajustes&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Help&quot;, &quot;Mostrar Ayuda&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;Hide Help&quot;, &quot;Ocultar Ayuda&quot;)<br/><br/>GlobalCommands_Spanish\test_GlobalCommands_Spanish.py:246: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;Hide Help&#x27;, text_log = &#x27;Ocultar Ayuda&#x27;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;&quot;+time_stamp_screenshot+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text_log+&quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text_log+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;hide help&#x27;</span><br/><span class="error">E             - hide help</span><br/><br/>GlobalCommands_Spanish\test_GlobalCommands_Spanish.py:95: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Regresar a inicio -&gt; PASS
+Mostrar Ayuda -&gt; PASS
+Ocultar Ayuda -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Mis controles -&gt; PASS
+Ir atrás -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Regresar a inicio -&gt; PASS
+Mis programas -&gt; PASS
+Mostrar Ayuda -&gt; PASS
+Ocultar Ayuda -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Mis controles -&gt; PASS
+Ir atrás -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Regresar a inicio -&gt; PASS
+Mis programas -&gt; PASS
+Acerca de dispositivo -&gt; PASS
+Mostrar Ayuda -&gt; PASS
+Ocultar Ayuda -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Mis controles -&gt; PASS
+Ir atrás -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Regresar a inicio -&gt; PASS
+Mis programas -&gt; PASS
+Grabador de audio -&gt; PASS
+Mostrar Ayuda -&gt; PASS
+Ocultar Ayuda -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Mis controles -&gt; PASS
+Ir atrás -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Regresar a inicio -&gt; PASS
+Mis programas -&gt; PASS
+Lector de Código de Barras -&gt; PASS
+Mostrar Ayuda -&gt; PASS
+Ocultar Ayuda -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Mis controles -&gt; PASS
+Ir atrás -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Regresar a inicio -&gt; PASS
+Mis programas -&gt; PASS
+SINCRONIZACIÓN EN LA NUBE -&gt; PASS
+Mostrar Ayuda -&gt; PASS
+Ocultar Ayuda -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Mis controles -&gt; PASS
+Ir atrás -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Regresar a inicio -&gt; PASS
+Mis programas -&gt; PASS
+Ajustes -&gt; PASS
+Mostrar Ayuda -&gt; PASS
+Ocultar Ayuda -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">MyCamera_Spanish/test_MyCamera_Spanish.py::test_MyCamera_Spanish</td>
+          <td class="col-duration">33.63</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_MyCamera_Spanish():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;,&quot;Mis programas&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Camera&quot;,&quot;Mi Cámara&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Take Photo&quot;, &quot;Tomar foto&quot;)<br/>        time.sleep(4)<br/>&gt;       voice_commands(&quot;Preview&quot;, &quot;AVANCE&quot;)<br/><br/>MyCamera_Spanish\test_MyCamera_Spanish.py:128: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;Preview&#x27;, text_log = &#x27;AVANCE&#x27;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;&quot;+time_stamp_screenshot+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text_log+&quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text_log+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;preview&#x27;</span><br/><span class="error">E             - preview</span><br/><br/>MyCamera_Spanish\test_MyCamera_Spanish.py:95: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Mis programas -&gt; PASS
+Mi Cámara -&gt; PASS
+Tomar foto -&gt; PASS
+AVANCE -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">AboutDevice_Spanish/test_AboutDevice_Spanish.py::test_AboutDevice_Spanish</td>
+          <td class="col-duration">197.48</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>REGRESAR A INICIO -&gt; PASS
+Mis programas -&gt; PASS
+Acerca de dispositivo -&gt; PASS
+VER LICENCIA DE USUARIO -&gt; PASS
+Bajar página -&gt; PASS
+Derecha de página -&gt; PASS
+Bajar página -&gt; PASS
+Izquierda de página -&gt; PASS
+MOSTRAR Ayuda -&gt; PASS
+OCULTAR AYUDA -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Mis controles -&gt; PASS
+IR atrás -&gt; PASS
+REGRESAR A INICIO -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Descartar todo -&gt; PASS
+REGRESAR A INICIO -&gt; PASS
+Mis programas -&gt; PASS
+Acerca de dispositivo -&gt; PASS
+Ver licencia de código abierto -&gt; PASS
+Bajar página -&gt; PASS
+Derecha de página -&gt; PASS
+Bajar página -&gt; PASS
+Izquierda de página -&gt; PASS
+MOSTRAR Ayuda -&gt; PASS
+OCULTAR AYUDA -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Mis controles -&gt; PASS
+IR atrás -&gt; PASS
+REGRESAR A INICIO -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Descartar todo -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">AudioRecorder_Spanish/test_AudioRecorder_Spanish.py::test_Spanish_AudioRecorder</td>
+          <td class="col-duration">225.46</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>REGRESAR A INICIO -&gt; PASS
+Mis programas -&gt; PASS
+Grabador de audio -&gt; PASS
+Grabar audio -&gt; PASS
+PAUSA GRABACIÓN -&gt; PASS
+REANUDAR GRABACIÓN -&gt; PASS
+PAUSA GRABACIÓN -&gt; PASS
+DETENER GRABACIÓN -&gt; PASS
+Avance -&gt; PASS
+IR atrás -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Descartar todo -&gt; PASS
+Mis programas -&gt; PASS
+Grabador de audio -&gt; PASS
+MAS OPCIONES -&gt; PASS
+CANAL DE AUDIO -&gt; PASS
+CANAL DE AUDIO -&gt; PASS
+CALIDAD DE AUDIO -&gt; PASS
+CALIDAD BAJA -&gt; PASS
+CALIDAD DE AUDIO -&gt; PASS
+CALIDAD MEDIA -&gt; PASS
+CALIDAD DE AUDIO -&gt; PASS
+CALIDAD ALTA -&gt; PASS
+DURACIÓN DE GRABACIÓN -&gt; PASS
+10 segundos -&gt; PASS
+DURACIÓN DE GRABACIÓN -&gt; PASS
+15 segundos -&gt; PASS
+DURACIÓN DE GRABACIÓN -&gt; PASS
+30 segundos -&gt; PASS
+DURACIÓN DE GRABACIÓN -&gt; PASS
+1 minuto -&gt; PASS
+DURACIÓN DE GRABACIÓN -&gt; PASS
+Manual -&gt; PASS
+Mostrar ayuda -&gt; PASS
+Ocultar ayuda -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Mis controles -&gt; PASS
+IR atrás -&gt; PASS
+OCULTAR AYUDA -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">BarcodeReader_Spanish/test_BarcodeReader_Spanish.py::test_BarcodeReader_Spanish</td>
+          <td class="col-duration">121.88</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Regresar a inicio -&gt; PASS
+Mis programas -&gt; PASS
+Lector de Código de Barras -&gt; PASS
+Nivel de zoom 2 -&gt; PASS
+Nivel de zoom 3 -&gt; PASS
+Nivel de zoom 4 -&gt; PASS
+Nivel de zoom 5 -&gt; PASS
+Nivel de zoom 1 -&gt; PASS
+Encender Linterna -&gt; PASS
+Apagar Linterna -&gt; PASS
+Mostrar Ayuda -&gt; PASS
+Ocultar Ayuda -&gt; PASS
+Mis controles -&gt; PASS
+Ir atrás -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Ir atrás -&gt; PASS
+Regresar a inicio -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">CloudSync_Spanish/test_CloudSync_Spanish.py::test_ClouldSync_Spanish</td>
+          <td class="col-duration">103.69</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Regresar a inicio -&gt; PASS
+Mis programas -&gt; PASS
+Sincronización en la nube -&gt; PASS
+Elemento 1 -&gt; PASS
+INICIAR SESIÓN AVANZADA -&gt; PASS
+Ir atrás -&gt; PASS
+INICIAR SESIÓN -&gt; PASS
+Mostrar Ayuda -&gt; PASS
+Ocultar Ayuda -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Mis controles -&gt; PASS
+Ir atrás -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Descartar todo -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">General_Settings_Spanish/test_General_Settings_Spanish.py::test_General_Setings_Spanish</td>
+          <td class="col-duration">496.58</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Regresar a inicio -&gt; PASS
+Mis programas -&gt; PASS
+Configuración -&gt; PASS
+Internet y redes -&gt; PASS
+Wi Fi -&gt; PASS
+Ir atrás -&gt; PASS
+Ir atrás -&gt; PASS
+Dispositivos conectados -&gt; PASS
+Sincronizar dispositivo nuevo -&gt; PASS
+Ir atrás -&gt; PASS
+Preferencias de conexión -&gt; PASS
+Ir atrás -&gt; PASS
+Ir atrás -&gt; PASS
+Batería -&gt; PASS
+Ir atrás -&gt; PASS
+Pantalla -&gt; PASS
+Nivel de brillo -&gt; PASS
+Ir atrás -&gt; PASS
+Luz nocturna -&gt; PASS
+Ir atrás -&gt; PASS
+Tiempo de espera de la pantalla -&gt; PASS
+30 segundos -&gt; PASS
+Tiempo de espera de la pantalla -&gt; PASS
+5 minutos -&gt; PASS
+Tiempo de espera de la pantalla -&gt; PASS
+10 minutos -&gt; PASS
+Tiempo de espera de la pantalla -&gt; PASS
+30 minutos -&gt; PASS
+Tiempo de espera de la pantalla -&gt; PASS
+CANCELAR -&gt; PASS
+Bajar página -&gt; PASS
+Opciones avanzadas -&gt; PASS
+Tamaño de fuente -&gt; PASS
+Ir atrás -&gt; PASS
+Ir atrás -&gt; PASS
+Sonido -&gt; PASS
+Ir atrás -&gt; PASS
+Bajar página -&gt; PASS
+Almacenamiento -&gt; PASS
+Ir atrás -&gt; PASS
+Privacidad -&gt; PASS
+Uso de accesibilidad -&gt; PASS
+Aceptar -&gt; PASS
+Administrador de permisos -&gt; PASS
+Ir atrás -&gt; PASS
+Mostrar contraseñas -&gt; PASS
+Mostrar contraseñas -&gt; PASS
+Pantalla de bloqueo -&gt; PASS
+Ir atrás -&gt; PASS
+Ir atrás -&gt; PASS
+Ubicación -&gt; PASS
+Usar ubicación -&gt; PASS
+Usar ubicación -&gt; PASS
+Ir atrás -&gt; PASS
+Seguridad -&gt; PASS
+Ir atrás -&gt; PASS
+Cuentas -&gt; PASS
+Ir atrás -&gt; PASS
+Accesibilidad -&gt; PASS
+Ir atrás -&gt; PASS
+RealWear -&gt; PASS
+Modo bluetooth -&gt; PASS
+Modo bluetooth -&gt; PASS
+Modo de almacenamiento -&gt; PASS
+Modo de almacenamiento -&gt; PASS
+Cámara Luz Baja -&gt; PASS
+Cámara Luz Baja -&gt; PASS
+Cámara campo de visión -&gt; PASS
+Cámara campo de visión -&gt; PASS
+Cámara Estabilización de imagen -&gt; PASS
+Cámara Estabilización de imagen -&gt; PASS
+Ir atrás -&gt; PASS
+Bajar página -&gt; PASS
+Sistema -&gt; PASS
+Ir atrás -&gt; PASS
+Acerca del dispositivo -&gt; PASS
+Nombre del dispositivo -&gt; PASS
+Ir atrás -&gt; PASS
+Aceptar -&gt; PASS
+CANCELAR -&gt; PASS
+Información de emergencia -&gt; PASS
+Ir atrás -&gt; PASS
+Modelo -&gt; PASS
+Ir atrás -&gt; PASS
+Bajar página -&gt; PASS
+Versión de Android -&gt; PASS
+Ir atrás -&gt; PASS
+Bajar página -&gt; PASS
+Número de compilación -&gt; PASS
+Ir atrás -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">MyControls_Spanish/test_MyControls_Spanish.py::test_MyControls_Spanish</td>
+          <td class="col-duration">507.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Regresar a inicio -&gt; PASS
+Mis controles -&gt; PASS
+Ratón -&gt; PASS
+Auto Rotación -&gt; PASS
+Botón Acción -&gt; PASS
+Grabar Ruido -&gt; PASS
+Botón Acción -&gt; PASS
+Pantalla Principal -&gt; PASS
+Opciones de Energía -&gt; PASS
+Mis controles -&gt; PASS
+Indicadores -&gt; PASS
+5 Segundos -&gt; PASS
+Indicadores -&gt; PASS
+10 Segundos -&gt; PASS
+Indicadores -&gt; PASS
+Nunca Se Desvanecen -&gt; PASS
+Indicadores -&gt; PASS
+3 Segundos -&gt; PASS
+Regresar a inicio -&gt; PASS
+Mis controles -&gt; PASS
+Red Inalámbrica -&gt; PASS
+Configuración de red -&gt; PASS
+Ir atrás -&gt; PASS
+Regresar a inicio -&gt; PASS
+Mis controles -&gt; PASS
+Red Preferida -&gt; PASS
+Ir atrás -&gt; PASS
+Regresar a inicio -&gt; PASS
+Mis controles -&gt; PASS
+Linterna -&gt; PASS
+Linterna -&gt; PASS
+Ir atrás -&gt; PASS
+Mis controles -&gt; PASS
+Luminosidad -&gt; PASS
+Establecer nivel 1 -&gt; PASS
+Luminosidad -&gt; PASS
+Establecer nivel 2 -&gt; PASS
+Luminosidad -&gt; PASS
+Establecer nivel 3 -&gt; PASS
+Luminosidad -&gt; PASS
+Establecer nivel 5 -&gt; PASS
+Luminosidad -&gt; PASS
+Establecer nivel 6 -&gt; PASS
+Luminosidad -&gt; PASS
+Establecer nivel 7 -&gt; PASS
+Luminosidad -&gt; PASS
+Establecer nivel 8 -&gt; PASS
+Luminosidad -&gt; PASS
+Establecer nivel 9 -&gt; PASS
+Luminosidad -&gt; PASS
+Establecer nivel 10 -&gt; PASS
+Luminosidad -&gt; PASS
+Establecer nivel 4 -&gt; PASS
+Regresar a inicio -&gt; PASS
+Mis controles -&gt; PASS
+Volumen -&gt; PASS
+Establecer nivel 1 -&gt; PASS
+Volumen -&gt; PASS
+Establecer nivel 2 -&gt; PASS
+Volumen -&gt; PASS
+Establecer nivel 3 -&gt; PASS
+Volumen -&gt; PASS
+Establecer nivel 4 -&gt; PASS
+Volumen -&gt; PASS
+Establecer nivel 6 -&gt; PASS
+Volumen -&gt; PASS
+Establecer nivel 7 -&gt; PASS
+Volumen -&gt; PASS
+Establecer nivel 8 -&gt; PASS
+Volumen -&gt; PASS
+Establecer nivel 9 -&gt; PASS
+Volumen -&gt; PASS
+Establecer nivel 10 -&gt; PASS
+Volumen -&gt; PASS
+Establecer nivel 5 -&gt; PASS
+Modo De Color -&gt; PASS
+Modo De Color -&gt; PASS
+Dictado -&gt; PASS
+Dictado -&gt; PASS
+Comando de Ayuda -&gt; PASS
+Comando de Ayuda -&gt; PASS
+Modo de Diseño -&gt; PASS
+Bajar página -&gt; PASS
+Modo de Diseño -&gt; PASS
+Más Ajustes -&gt; PASS
+Ir atrás -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">MyFiles_Spanish/test_MyFiles_Spanish.py::test_MyFiles_Spanish</td>
+          <td class="col-duration">339.23</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Regresar a inicio -&gt; PASS
+Mis Archivos -&gt; PASS
+Mi Informacion -&gt; PASS
+Ir atrás -&gt; PASS
+Mis Documentos -&gt; PASS
+Ir atrás -&gt; PASS
+Mis Fotos -&gt; PASS
+Ir atrás -&gt; PASS
+Mis Descargas -&gt; PASS
+Ir atrás -&gt; PASS
+Mis Unidades -&gt; PASS
+Ir atrás -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Descartar todo -&gt; PASS
+Regresar a inicio -&gt; PASS
+Mi Cámara -&gt; PASS
+Tomar foto -&gt; PASS
+Regresar a inicio -&gt; PASS
+Mis Archivos -&gt; PASS
+Mis Fotos -&gt; PASS
+Camera -&gt; PASS
+Elemento 1 -&gt; PASS
+Nivel de zoom 2 -&gt; PASS
+Nivel de zoom 1 -&gt; PASS
+Nivel de zoom 4 -&gt; PASS
+Nivel de zoom 5 -&gt; PASS
+Nivel de zoom 3 -&gt; PASS
+Congelar ventana -&gt; PASS
+Controlar ventana -&gt; PASS
+Reiniciar Ventana -&gt; PASS
+Ir atrás -&gt; PASS
+Volver un nivel -&gt; PASS
+Mas Opciones -&gt; PASS
+Ordenar archivos -&gt; PASS
+Por fecha -&gt; PASS
+Ordenar archivos -&gt; PASS
+Por nombre -&gt; PASS
+Ocultar Opciones -&gt; PASS
+Camera -&gt; PASS
+Mas Opciones -&gt; PASS
+Editar -&gt; PASS
+Elemento 1 -&gt; PASS
+Eliminar selección -&gt; PASS
+CONFIRMAR -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Descartar todo -&gt; PASS
+Mis Archivos -&gt; PASS
+Mis Documentos -&gt; PASS
+Elemento 1 -&gt; PASS
+Nivel de zoom 3 -&gt; PASS
+Nivel de zoom 1 -&gt; PASS
+Nivel de zoom 4 -&gt; PASS
+Nivel de zoom 5 -&gt; PASS
+Nivel de zoom 2 -&gt; PASS
+Congelar ventana -&gt; PASS
+Controlar ventana -&gt; PASS
+Reiniciar Ventana -&gt; PASS
+Ir a página 10 -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">WebApps_Spanish/test_WebApps_Spanish.py::test_WebApps_Spanish</td>
+          <td class="col-duration">270.56</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Regresar a inicio -&gt; PASS
+Mis programas -&gt; PASS
+Aplicaciones Web -&gt; PASS
+Youtube -&gt; PASS
+Actualizar página -&gt; PASS
+Mas Opciones -&gt; PASS
+Ratón -&gt; PASS
+Escanear Codigo -&gt; PASS
+Ir atrás -&gt; PASS
+Añadir a marcadores -&gt; PASS
+CANCELAR -&gt; PASS
+Añadir a marcadores -&gt; PASS
+GUARDAR MARCADOR -&gt; PASS
+Ocultar Opciones -&gt; PASS
+Ir atrás -&gt; PASS
+Realwear -&gt; PASS
+Actualizar página -&gt; PASS
+Mas Opciones -&gt; PASS
+Ratón -&gt; PASS
+Ocultar Opciones -&gt; PASS
+Elemento 3 -&gt; PASS
+Mas Opciones -&gt; PASS
+Escanear Codigo -&gt; PASS
+Ir atrás -&gt; PASS
+Añadir a marcadores -&gt; PASS
+CANCELAR -&gt; PASS
+Añadir a marcadores -&gt; PASS
+GUARDAR MARCADOR -&gt; PASS
+Ocultar Opciones -&gt; PASS
+Ir atrás -&gt; PASS
+Google -&gt; PASS
+Actualizar página -&gt; PASS
+Mas Opciones -&gt; PASS
+Ratón -&gt; PASS
+Escanear Codigo -&gt; PASS
+Ir atrás -&gt; PASS
+Añadir a marcadores -&gt; PASS
+CANCELAR -&gt; PASS
+Añadir a marcadores -&gt; PASS
+GUARDAR MARCADOR -&gt; PASS
+Ocultar Opciones -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Descartar todo -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">WirelessUpdate_Spanish/test_WirelessUpdate_Spanish.py::test_WirelessUpdate_Spanish</td>
+          <td class="col-duration">181.52</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Regresar a inicio -&gt; PASS
+Mis programas -&gt; PASS
+Actualización del Sistema -&gt; PASS
+Elemento 2 -&gt; PASS
+Actualizaciones locales. -&gt; PASS
+Mostrar Ayuda -&gt; PASS
+Ocultar Ayuda -&gt; PASS
+Mis controles -&gt; PASS
+Ir atrás -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Ir atrás -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Ir atrás -&gt; PASS
+Elemento 2 -&gt; PASS
+Ajustes -&gt; PASS
+Mostrar Ayuda -&gt; PASS
+Ocultar Ayuda -&gt; PASS
+Aplicaciones recientes -&gt; PASS
+Ir atrás -&gt; PASS
+Mis controles -&gt; PASS
+Ir atrás -&gt; PASS
+Mostrar notificaciones -&gt; PASS
+Ocultar notificaciones -&gt; PASS
+Ir atrás -&gt; PASS
+Comprobar actualizaciones -&gt; PASS
+Mis controles -&gt; PASS
+Ir atrás -&gt; PASS
+Elemento 2 -&gt; PASS
+Salir -&gt; PASS
+<br/></div></td></tr></tbody></table></body></html>

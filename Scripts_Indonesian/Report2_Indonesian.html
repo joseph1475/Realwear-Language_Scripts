@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>Report2_Indonesian.html</h1>
+    <p>Report generated on 29-May-2021 at 01:01:32 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk-11.0.10</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "0.13.1", "py": "1.10.0", "pytest": "6.2.3"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19041-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "metadata": "1.11.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.9.4</td></tr></table>
+    <h2>Summary</h2>
+    <p>12 tests ran in 2426.13 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">5 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">7 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">AudioRecorder_Indonesian/test_AudioRecorder_Indonesian.py::test_AudioRecorder_Indonesian</td>
+          <td class="col-duration">83.31</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_AudioRecorder_Indonesian():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        #main UI<br/>        voice_commands(&quot;Navigate Home&quot;,&quot;Kembali Ke Awal&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;,&quot;Program Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Audio Recorder&quot;,&quot;Perekam Audio&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Record Audio&quot;,&quot;Rekaman Audio&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Pause Recording&quot;,&quot;Jeda Rekaman&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Resume Recording&quot;,&quot;Lanjutkan Rekaman&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Pause Recording&quot;,&quot;Jeda Rekaman&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Stop Recording&quot;,&quot;Hentikan Rekaman&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Preview&quot;,&quot;PRATINJAU&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        #voice_commands(&quot;Recent Applications&quot;,&quot;Aplikasi Terbaru&quot;)<br/>        #time.sleep(3)<br/>        #voice_commands(&quot;Dismiss All&quot;,&quot;Dismiss all&quot;)<br/>        #time.sleep(2)<br/>        #checking options<br/>        #voice_commands(&quot;My Programs&quot;,&quot;Program Saya&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Audio Recorder&quot;,&quot;Perekam Audio&quot;)<br/>        #time.sleep(2)<br/>        voice_commands(&quot;More Options&quot;,&quot;Pilihan Lain&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Audio Channel&quot;,&quot;Saluran Audio&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;Audio Channel&quot;,&quot;Saluran Audio&quot;)<br/><br/>AudioRecorder_Indonesian\test_AudioRecorder_Indonesian.py:156: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;Audio Channel&#x27;, text_log = &#x27;Saluran Audio&#x27;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;&quot;+time_stamp_screenshot+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text_log+&quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text_log+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;audio channel&#x27;</span><br/><span class="error">E             - audio channel</span><br/><br/>AudioRecorder_Indonesian\test_AudioRecorder_Indonesian.py:95: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+Perekam Audio -&gt; PASS
+Rekaman Audio -&gt; PASS
+Jeda Rekaman -&gt; PASS
+Lanjutkan Rekaman -&gt; PASS
+Jeda Rekaman -&gt; PASS
+Hentikan Rekaman -&gt; PASS
+PRATINJAU -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Pilihan Lain -&gt; PASS
+Saluran Audio -&gt; PASS
+Saluran Audio -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">BarcodeReader_Indonesian/test_BarcodeReader_Indonesian.py::test_BarcodeReader_Indonesian</td>
+          <td class="col-duration">41.80</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_BarcodeReader_Indonesian():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Home&quot;,&quot;Kembali Ke Awal&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;,&quot;Program Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Barcode Reader&quot;,&quot;Pembaca Kode Batang&quot;)<br/>        time.sleep(2)<br/>    <br/>    #def test_BarcodeReaderZoomLevels():<br/>        voice_commands(&quot;Zoom Level 2&quot;,&quot;Tingkat zoom 2&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Zoom Level 3&quot;,&quot;Tingkat zoom 3&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;Zoom Level 4&quot;,&quot;Tingkat zoom 4&quot;)<br/><br/>BarcodeReader_Indonesian\test_BarcodeReader_Indonesian.py:135: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;Zoom Level 4&#x27;, text_log = &#x27;Tingkat zoom 4&#x27;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;&quot;+time_stamp_screenshot+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text_log+&quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text_log+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;zoom level 4&#x27;</span><br/><span class="error">E             - zoom level 4</span><br/><br/>BarcodeReader_Indonesian\test_BarcodeReader_Indonesian.py:96: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+Pembaca Kode Batang -&gt; PASS
+Tingkat zoom 2 -&gt; PASS
+Tingkat zoom 3 -&gt; PASS
+Tingkat zoom 4 -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">General_Settings_Indonesian/test_General_Settings_Indonesian.py::test_General_Setings_Indonesian</td>
+          <td class="col-duration">361.95</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_General_Setings_Indonesian():<br/>    <br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>    <br/>        # Network and Internet options testing<br/>        voice_commands(&quot;Navigate Home&quot;,&quot;Kembali Ke Awal&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;,&quot;Program Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Settings&quot;,&quot;Setelan&quot;)<br/>        time.sleep(4)<br/>        voice_commands(&quot;Network and Internet&quot;,&quot;Jaringan dan internet&quot;)<br/>        time.sleep(2)<br/>        #voice_commands(&quot;Wireless Networks&quot;,&quot;&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Navigate back&quot;,&quot;&quot;Satu Tingkat Kembali&quot;)<br/>        #time.sleep(3)<br/>        voice_commands(&quot;Navigate back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Connected devices&quot;,&quot;Perangkat tersambung&quot;)<br/>        time.sleep(2)<br/>        #voice_commands(&quot;USB&quot;,&quot;USB&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        #time.sleep(2)<br/>        voice_commands(&quot;Pair new device&quot;,&quot;Sambungkan perangkat baru&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Connection preferences&quot;,&quot;Preferensi sambungan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Apps and notifications&quot;,&quot;Aplikasi dan notifikasi&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        #voice_commands(&quot;battery&quot;,&quot;&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Navigate Back&quot;,&quot;&quot;)<br/>        #time.sleep(2)<br/>        voice_commands(&quot;Display&quot;,&quot;Tampilan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Brightness level&quot;,&quot;Tingkat kecerahan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Night Light&quot;,&quot;Cahaya Malam&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>    <br/>        #voice_commands(&quot;Screen timeout&quot;,&quot;Waktu tunggu layar&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;30 seconds&quot;,&quot;30 detik&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Screen timeout&quot;,&quot;&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;5 minutes&quot;,&quot;&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Screen timeout&quot;,&quot;&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;10 minutes&quot;,&quot;&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Screen timeout&quot;,&quot;&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;30 minutes&quot;,&quot;&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Screen timeout&quot;,&quot;&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;CANCEL&quot;,&quot;&quot;)<br/>        #time.sleep(2)<br/>    <br/>        voice_commands(&quot;Page Down&quot;,&quot;Halaman Ke Bawah&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Advanced&quot;,&quot;Lanjutan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Font size&quot;,&quot;Ukuran font&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Sound&quot;,&quot;Suara&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Page down&quot;,&quot;Halaman Ke Bawah&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Storage&quot;,&quot;Penyimpanan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Privacy&quot;,&quot;Privasi&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Accessibility usage&quot;,&quot;Penggunaan aksesibilitas&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;ok&quot;,&quot;YA&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Permission manager&quot;,&quot;Pengelola izin&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;navigate back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show passwords&quot;,&quot;Tampilkan sandi&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show passwords&quot;,&quot;Tampilkan sandi&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Lock screen&quot;,&quot;Layar kunci&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Location&quot;,&quot;Lokasi&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Use Location&quot;,&quot;Gunakan lokasi&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Use Location&quot;,&quot;Gunakan lokasi&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Security&quot;,&quot;Keamanan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Accounts&quot;,&quot;Akun&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Accessibility&quot;,&quot;Aksesibilitas&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Realwear&quot;,&quot;RealWear&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Bluetooth Mode&quot;,&quot;Moda Bluetooth&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Bluetooth Mode&quot;,&quot;Moda Bluetooth&quot;)<br/>        time.sleep(2)<br/>    <br/>        voice_commands(&quot;Storage Mode&quot;,&quot;Moda Penyimpanan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Storage Mode&quot;,&quot;Moda Penyimpanan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;CameraLow light&quot;,&quot;Kamera Cahaya Rendah&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;CameraLow light&quot;,&quot;Kamera Cahaya Rendah&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;CameraField of View&quot;,&quot;Kamera Bidang Tampilan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;CameraField of View&quot;,&quot;Kamera Bidang Tampilan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;CameraImage Stabilization&quot;,&quot;Kamera Stabilisasi Gambar&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;CameraImage Stabilization&quot;,&quot;Kamera Stabilisasi Gambar&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Page down&quot;,&quot;Halaman Ke Bawah&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;System&quot;,&quot;Sistem&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;About Device&quot;,&quot;Tentang ponsel&quot;)<br/><br/>General_Settings_Indonesian\test_General_Settings_Indonesian.py:286: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;About Device&#x27;, text_log = &#x27;Tentang ponsel&#x27;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;&quot;+time_stamp_screenshot+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text_log+&quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text_log+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;about device&#x27;</span><br/><span class="error">E             - about device</span><br/><br/>General_Settings_Indonesian\test_General_Settings_Indonesian.py:95: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+Setelan -&gt; PASS
+Jaringan dan internet -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Perangkat tersambung -&gt; PASS
+Sambungkan perangkat baru -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Preferensi sambungan -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi dan notifikasi -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Tampilan -&gt; PASS
+Tingkat kecerahan -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Cahaya Malam -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Halaman Ke Bawah -&gt; PASS
+Lanjutan -&gt; PASS
+Ukuran font -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Suara -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Halaman Ke Bawah -&gt; PASS
+Penyimpanan -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Privasi -&gt; PASS
+Penggunaan aksesibilitas -&gt; PASS
+YA -&gt; PASS
+Pengelola izin -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Tampilkan sandi -&gt; PASS
+Tampilkan sandi -&gt; PASS
+Layar kunci -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Lokasi -&gt; PASS
+Gunakan lokasi -&gt; PASS
+Gunakan lokasi -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Keamanan -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Akun -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aksesibilitas -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+RealWear -&gt; PASS
+Moda Bluetooth -&gt; PASS
+Moda Bluetooth -&gt; PASS
+Moda Penyimpanan -&gt; PASS
+Moda Penyimpanan -&gt; PASS
+Kamera Cahaya Rendah -&gt; PASS
+Kamera Cahaya Rendah -&gt; PASS
+Kamera Bidang Tampilan -&gt; PASS
+Kamera Bidang Tampilan -&gt; PASS
+Kamera Stabilisasi Gambar -&gt; PASS
+Kamera Stabilisasi Gambar -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Halaman Ke Bawah -&gt; PASS
+Sistem -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Tentang ponsel -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">MyCamera_Indonesian/test_MyCamera_Indonesian.py::test_MyCamera_Indonesian</td>
+          <td class="col-duration">238.49</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_MyCamera_Indonesian():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;,&quot;Program Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Camera&quot;,&quot;Kameraku Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Take Photo&quot;, &quot;Memotret&quot;)<br/>        time.sleep(3)<br/>        voice_commands(&quot;Preview&quot;, &quot;PRATINJAU&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;zoom level 2&quot;, &quot;Tingkat zoom 2&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;zoom level 3&quot;, &quot;Tingkat zoom 3&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;zoom level 4&quot;, &quot;Tingkat zoom 4&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;zoom level 5&quot;, &quot;Tingkat zoom 5&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Freeze Window&quot;, &quot;Bekukan Layar&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Control Window&quot;, &quot;aktifkan layar&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;zoom level 1&quot;, &quot;Tingkat zoom 1&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Delete&quot;, &quot;Hapus&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Confirm&quot;, &quot;KONFIRMASI&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Recent Applications&quot;, &quot;Aplikasi Terbaru&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Dismiss All&quot;, &quot;Dismiss all&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Camera&quot;, &quot;Kameraku Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Take Photo&quot;, &quot;Memotret&quot;)<br/>        time.sleep(10)<br/>        voice_commands(&quot;My Files&quot;, &quot;File Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Photos&quot;, &quot;Foto Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Camera&quot;, &quot;Camera&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Select item 1&quot;, &quot;Pilih Nomer 1&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;, &quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Back one level&quot;, &quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My files&quot;, &quot;FILE SAYA&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;, &quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Help&quot;, &quot;Minta Bantuan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Help&quot;, &quot;Sembunyikan Bantuan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Flash On&quot;, &quot;nyalakan flash&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Flash Off&quot;, &quot;matikan flash&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Flash Auto&quot;, &quot;flash otomatis&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Manual Focus&quot;, &quot;fokus manual&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Auto Focus&quot;, &quot;fokus otomatis&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Exposure level plus 1&quot;, &quot;tingkat pajanan plus 1&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Exposure level plus 2&quot;, &quot;tingkat pajanan plus 2&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Exposure level minus 1&quot;, &quot;tingkat pajanan minus 1&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Exposure level minus 2&quot;, &quot;tingkat pajanan minus 2&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Exposure level 0&quot;, &quot;tingkat pajanan 0&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;zoom level 2&quot;, &quot;Tingkat Zoom 2&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;zoom level 3&quot;, &quot;Tingkat Zoom 3&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;zoom level 4&quot;, &quot;Tingkat Zoom 4&quot;)<br/><br/>MyCamera_Indonesian\test_MyCamera_Indonesian.py:200: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;zoom level 4&#x27;, text_log = &#x27;Tingkat Zoom 4&#x27;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;&quot;+time_stamp_screenshot+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text_log+&quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text_log+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;zoom level 4&#x27;</span><br/><span class="error">E             - zoom level 4</span><br/><br/>MyCamera_Indonesian\test_MyCamera_Indonesian.py:95: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Program Saya -&gt; PASS
+Kameraku Saya -&gt; PASS
+Memotret -&gt; PASS
+PRATINJAU -&gt; PASS
+Tingkat zoom 2 -&gt; PASS
+Tingkat zoom 3 -&gt; PASS
+Tingkat zoom 4 -&gt; PASS
+Tingkat zoom 5 -&gt; PASS
+Bekukan Layar -&gt; PASS
+aktifkan layar -&gt; PASS
+Tingkat zoom 1 -&gt; PASS
+Hapus -&gt; PASS
+KONFIRMASI -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Dismiss all -&gt; PASS
+Kameraku Saya -&gt; PASS
+Memotret -&gt; PASS
+File Saya -&gt; PASS
+Foto Saya -&gt; PASS
+Camera -&gt; PASS
+Pilih Nomer 1 -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+FILE SAYA -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+nyalakan flash -&gt; PASS
+matikan flash -&gt; PASS
+flash otomatis -&gt; PASS
+fokus manual -&gt; PASS
+fokus otomatis -&gt; PASS
+tingkat pajanan plus 1 -&gt; PASS
+tingkat pajanan plus 2 -&gt; PASS
+tingkat pajanan minus 1 -&gt; PASS
+tingkat pajanan minus 2 -&gt; PASS
+tingkat pajanan 0 -&gt; PASS
+Tingkat Zoom 2 -&gt; PASS
+Tingkat Zoom 3 -&gt; PASS
+Tingkat Zoom 4 -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">MyControls_Indonesian/test_MyControls_Indonesian.py::test_MyControls_Indonesian</td>
+          <td class="col-duration">67.58</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_MyControls_Indonesian():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Home&quot;,&quot;Kembali Ke Awal&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Controls&quot;,&quot;Pengaturan Pemakai&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Mouse&quot;,&quot;Tetikuis&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Auto Rotate&quot;,&quot;Rotasi Otomatis&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Action Button&quot;,&quot;Tombol Tindakan&quot;)<br/>        #time.sleep(1)<br/>        #voice_commands(&quot;Noise Capture&quot;,&quot;tangkap suara latar&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Action Button&quot;,&quot;Tombol Tindakan&quot;)<br/>        #time.sleep(1)<br/>        #voice_commands(&quot;Homescreen&quot;,&quot;Tampilan Depan&quot;)<br/>        time.sleep(3)<br/>        voice_commands(&quot;Power Options&quot;,&quot;Pilihan Power&quot;)<br/>        time.sleep(4)<br/>        voice_commands(&quot;My Controls&quot;,&quot;Pengaturan Pemakai&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;WearML Indicators&quot;,&quot;Indikator WearML&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Fade 5 Seconds&quot;,&quot;Memudar 5 Detik&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;WearML Indicators&quot;,&quot;Indikator WearML&quot;)<br/><br/>MyControls_Indonesian\test_MyControls_Indonesian.py:146: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;WearML Indicators&#x27;, text_log = &#x27;Indikator WearML&#x27;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;&quot;+time_stamp_screenshot+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text_log+&quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text_log+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;wearml indicators&#x27;</span><br/><span class="error">E             - wearml indicators</span><br/><br/>MyControls_Indonesian\test_MyControls_Indonesian.py:95: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Kembali Ke Awal -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Tetikuis -&gt; PASS
+Rotasi Otomatis -&gt; PASS
+Tombol Tindakan -&gt; PASS
+Pilihan Power -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Indikator WearML -&gt; PASS
+Memudar 5 Detik -&gt; PASS
+Indikator WearML -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">MyFiles_Indonesian/test_MyFiles_Indonesian.py::test_MyFiles_Indonesian</td>
+          <td class="col-duration">211.37</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_MyFiles_Indonesian():<br/>    <br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>    <br/>        # first level UI<br/>        voice_commands(&quot;Navigate Home&quot;, &quot;Kembali Ke Awal&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Files&quot;, &quot;File Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Media&quot;, &quot;Media Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;, &quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Documents&quot;, &quot;Dokumen Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;, &quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Photos&quot;, &quot;Foto Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;, &quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Downloads&quot;, &quot;Unduhan Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;, &quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Drives&quot;, &quot;Drive Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My device&quot;, &quot;Perangkat Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;, &quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;, &quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        #voice_commands(&quot;Recent Applications&quot;, &quot;Aplikasi Terbaru&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Dismiss All&quot;, &quot;Dismiss all&quot;)<br/>        #time.sleep(2)<br/>        voice_commands(&quot;Navigate HOME&quot;, &quot;Kembali Ke Awal&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My CAMERA&quot;, &quot;Kameraku Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Take Photo&quot;, &quot;Memotret&quot;)<br/>        time.sleep(10)<br/>        voice_commands(&quot;Navigate Home&quot;, &quot;Kembali Ke Awal&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;MY FILES&quot;, &quot;File Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;MY PHOTOS&quot;, &quot;Foto Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;CAMERA&quot;, &quot;Camera&quot;)<br/>        time.sleep(4)<br/>        voice_commands(&quot;SELECT ITEM 1&quot;, &quot;Pilih Nomer 1&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;ZOOM LEVEL 2&quot;, &quot;Tingkat zoom 2&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;ZOOM LEVEL 1&quot;, &quot;Tingkat zoom 1&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;ZOOM LEVEL 4&quot;, &quot;Tingkat zoom 4&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;ZOOM LEVEL 5&quot;, &quot;Tingkat zoom 5&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;ZOOM LEVEL 3&quot;, &quot;Tingkat zoom 3&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;FREEZE WINDOW&quot;, &quot;Bekukan Layar&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;CONTROL WINDOW&quot;, &quot;Aktifkan Layar&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;RESET WINDOW&quot;, &quot;ulang jendela&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;, &quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;, &quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;MORE OPTIONS&quot;, &quot;Pilihan Lain&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;SORT FILES&quot;, &quot;Pilah File&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;BY DATE&quot;, &quot;Dengan Tanggal&quot;)<br/><br/>MyFiles_Indonesian\test_MyFiles_Indonesian.py:197: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;BY DATE&#x27;, text_log = &#x27;Dengan Tanggal&#x27;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;&quot;+time_stamp_screenshot+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text_log+&quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text_log+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;by date&#x27;</span><br/><span class="error">E             - by date</span><br/><br/>MyFiles_Indonesian\test_MyFiles_Indonesian.py:95: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Kembali Ke Awal -&gt; PASS
+File Saya -&gt; PASS
+Media Saya -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Dokumen Saya -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Foto Saya -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Unduhan Saya -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Drive Saya -&gt; PASS
+Perangkat Saya -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Kameraku Saya -&gt; PASS
+Memotret -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+File Saya -&gt; PASS
+Foto Saya -&gt; PASS
+Camera -&gt; PASS
+Pilih Nomer 1 -&gt; PASS
+Tingkat zoom 2 -&gt; PASS
+Tingkat zoom 1 -&gt; PASS
+Tingkat zoom 4 -&gt; PASS
+Tingkat zoom 5 -&gt; PASS
+Tingkat zoom 3 -&gt; PASS
+Bekukan Layar -&gt; PASS
+Aktifkan Layar -&gt; PASS
+ulang jendela -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Pilihan Lain -&gt; PASS
+Pilah File -&gt; PASS
+Dengan Tanggal -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">WebApps_Indonesian/test_WebApps_Indonesian.py::test_WebApps_Indonesian</td>
+          <td class="col-duration">191.47</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_WebApps_Indonesian():<br/>    <br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>    <br/>        #launching web apps<br/>        voice_commands(&quot;Navigate Home&quot;,&quot;Kembali Ke Awal&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;,&quot;Program Saya&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Web Apps&quot;,&quot;Aplikasi Jaringan&quot;)<br/>        time.sleep(2)<br/>        #youtube verifications<br/>        voice_commands(&quot;Youtube&quot;,&quot;Youtube&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Refresh Page&quot;,&quot;Refresh Halaman&quot;)<br/>        time.sleep(4)<br/>        voice_commands(&quot;More Options&quot;,&quot;Pilihan Lain&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Mouse&quot;,&quot;Tetikuis&quot;)<br/>        time.sleep(2)<br/>        #voice_commands(&quot;Scan code&quot;,&quot;pindai kode&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        #time.sleep(4)<br/>        voice_commands(&quot;Add to Bookmarks&quot;,&quot;Tambahkan Penanda Buku&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Cancel&quot;,&quot;BATAL&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Add to Bookmarks&quot;,&quot;Tambahkan Penanda Buku&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Save Bookmark&quot;,&quot;SIMPAN PENANDA BUKU&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Options&quot;,&quot;Sembunyikan Pilihan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Realwear&quot;,&quot;Realwear&quot;)<br/>        time.sleep(6)<br/>        voice_commands(&quot;Refresh Page&quot;,&quot;Refresh Halaman&quot;)<br/>        time.sleep(5)<br/>        Accept_cookies()<br/>        voice_commands(&quot;More Options&quot;,&quot;Pilihan Lain&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Mouse&quot;,&quot;Tetikuis&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Options&quot;,&quot;Sembunyikan Pilihan&quot;)<br/>        time.sleep(4)<br/>        #voice_commands(&quot;Select item 3&quot;,&quot;Pilih nomor 3&quot;)<br/>        #time.sleep(4)<br/>        voice_commands(&quot;More Options&quot;,&quot;Pilihan Lain&quot;)<br/>        time.sleep(2)<br/>        #voice_commands(&quot;Scan code&quot;,&quot;pindai kode&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        #time.sleep(4)<br/>        voice_commands(&quot;Add to Bookmarks&quot;,&quot;Tambahkan Penanda Buku&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Cancel&quot;,&quot;BATAL&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Add to Bookmarks&quot;,&quot;Tambahkan Penanda Buku&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Save Bookmark&quot;,&quot;SIMPAN PENANDA BUKU&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Options&quot;,&quot;Sembunyikan Pilihan&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Satu Tingkat Kembali&quot;)<br/>        time.sleep(10)<br/>&gt;       voice_commands(&quot;Google&quot;,&quot;Google&quot;)<br/><br/>WebApps_Indonesian\test_WebApps_Indonesian.py:195: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;Google&#x27;, text_log = &#x27;Google&#x27;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;&quot;+time_stamp_screenshot+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text_log+&quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text_log+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;google&#x27;</span><br/><span class="error">E             - google</span><br/><br/>WebApps_Indonesian\test_WebApps_Indonesian.py:95: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+Aplikasi Jaringan -&gt; PASS
+Youtube -&gt; PASS
+Refresh Halaman -&gt; PASS
+Pilihan Lain -&gt; PASS
+Tetikuis -&gt; PASS
+Tambahkan Penanda Buku -&gt; PASS
+BATAL -&gt; PASS
+Tambahkan Penanda Buku -&gt; PASS
+SIMPAN PENANDA BUKU -&gt; PASS
+Sembunyikan Pilihan -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Realwear -&gt; PASS
+Refresh Halaman -&gt; PASS
+Pilihan Lain -&gt; PASS
+Tetikuis -&gt; PASS
+Sembunyikan Pilihan -&gt; PASS
+Pilihan Lain -&gt; PASS
+Tambahkan Penanda Buku -&gt; PASS
+BATAL -&gt; PASS
+Tambahkan Penanda Buku -&gt; PASS
+SIMPAN PENANDA BUKU -&gt; PASS
+Sembunyikan Pilihan -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Google -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">AboutDevice_Indonesian/test_AboutDevice_Indonesian.py::test_AboutDevice_Indonesian</td>
+          <td class="col-duration">187.23</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+Tentang Perangkat -&gt; PASS
+LIHAT LISENSI PENGGUNA -&gt; PASS
+Halaman Ke Bawah -&gt; PASS
+Halaman Ke Kanan -&gt; PASS
+Halaman Ke Bawah -&gt; PASS
+Halaman Ke Kiri -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Dismiss all -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+Tentang Perangkat -&gt; PASS
+LIHAT LISENSI OPEN SOURCE -&gt; PASS
+Halaman Ke Bawah -&gt; PASS
+Halaman Ke Kanan -&gt; PASS
+Halaman Ke Bawah -&gt; PASS
+Halaman Ke Kiri -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">CloudSync_Indonesian/test_CloudSync_Indonesian.py::test_ClouldSync_Indonesian</td>
+          <td class="col-duration">89.46</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+Sinkronisasi Cloud -&gt; PASS
+Pilih Nomer 1 -&gt; PASS
+CANGGIH MASUK -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+MASUK -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">ConfigurationApp_Indonesian/test_ConfigurationApp_Indonesian.py::test_ConfigurationApp_Indonesian</td>
+          <td class="col-duration">114.72</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+Konfigurasi -&gt; PASS
+Tingkat zoom 2 -&gt; PASS
+Tingkat zoom 3 -&gt; PASS
+Tingkat zoom 4 -&gt; PASS
+Tingkat zoom 5 -&gt; PASS
+Tingkat zoom 1 -&gt; PASS
+nyalakan flash -&gt; PASS
+matikan flash -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">GlobalCommands_Indonesian/test_GlobalCommands_Indonesian.py::test_GlobalCommands_Indonesian</td>
+          <td class="col-duration">657.34</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Kembali Ke Awal -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+Tentang Perangkat -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+perekam audio -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+pembaca kode batang -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+Sinkronisasi Cloud -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+konfigurasi -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+kameraku saya -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+file saya -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+setelan -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+aplikasi jaringan -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+pembaruan nirkabel -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Kembali Ke Awal -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">WirelessUpdate_Indonesian/test_WirelessUpdate_Indonesian.py::test_WirelessUpdate_Indonesian</td>
+          <td class="col-duration">180.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Kembali Ke Awal -&gt; PASS
+Program Saya -&gt; PASS
+Pembaruan nirkabel -&gt; PASS
+Pilih Nomer 2 -&gt; PASS
+Pembaharuan lokal -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Pilih Nomer 2 -&gt; PASS
+Pengaturan -&gt; PASS
+Minta Bantuan -&gt; PASS
+Sembunyikan Bantuan -&gt; PASS
+Aplikasi Terbaru -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Tampilkan Notifikasi -&gt; PASS
+Sembunyikan Pemberitahuan -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Memeriksa untuk pembaruan -&gt; PASS
+Pengaturan Pemakai -&gt; PASS
+Satu Tingkat Kembali -&gt; PASS
+Pilih Nomer 2 -&gt; PASS
+Exit -&gt; PASS
+<br/></div></td></tr></tbody></table></body></html>

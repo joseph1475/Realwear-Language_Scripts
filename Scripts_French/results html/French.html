@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>French.html</h1>
+    <p>Report generated on 29-May-2021 at 15:10:15 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk-11.0.10</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "0.13.1", "py": "1.10.0", "pytest": "6.2.3"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19041-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "metadata": "1.11.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.9.4</td></tr></table>
+    <h2>Summary</h2>
+    <p>12 tests ran in 3044.57 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">9 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">3 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">MyCamera_French/test_MyCamera_French.py::test_MyCamera_French</td>
+          <td class="col-duration">34.88</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_MyCamera_French():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;, &quot;Mes programmes&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Camera&quot;, &quot;Mon appareil photo&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Take Photo&quot;, &quot;Prendre une Photo&quot;)<br/>        time.sleep(5)<br/>&gt;       voice_commands(&quot;Preview&quot;, &quot;APERÇU&quot;)<br/><br/>MyCamera_French\test_MyCamera_French.py:127: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;Preview&#x27;, text_log = &#x27;APERÇU&#x27;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27; + text + &#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27; + text + &#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot; + TC_Name + &quot;&quot; + time_stamp_screenshot + &quot;\&quot;/\&quot;&quot; + text + &quot;\&quot;&quot; + time_stamp + &quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot; + text_log + &quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot; + text_log + &quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;preview&#x27;</span><br/><span class="error">E             - preview</span><br/><br/>MyCamera_French\test_MyCamera_French.py:93: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Mes programmes -&gt; PASS
+Mon appareil photo -&gt; PASS
+Prendre une Photo -&gt; PASS
+APERÇU -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">WebApps_French/test_WebApps_French.py::test_WebApps_French</td>
+          <td class="col-duration">142.75</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_WebApps_French():<br/>    <br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>    <br/>        #launching web apps<br/>        voice_commands(&quot;Navigate Home&quot;,&quot;Menu Principal&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;,&quot;Mes Programmes&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Web Apps&quot;,&quot;Applications Web&quot;)<br/>        time.sleep(2)<br/>        #youtube verifications<br/>        voice_commands(&quot;Youtube&quot;,&quot;Youtube&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Refresh Page&quot;,&quot;Rafraîchir la page&quot;)<br/>        time.sleep(4)<br/>        voice_commands(&quot;More Options&quot;,&quot;Plus D&#x27;Options&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Mouse&quot;,&quot;Souris&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Scan code&quot;,&quot;Scanner code bar&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;,&quot;Retour En Arrière&quot;)<br/>        time.sleep(4)<br/>        voice_commands(&quot;Add to Bookmarks&quot;,&quot;Ajouter aux signets&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Cancel&quot;,&quot;ANNULER&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Add to Bookmarks&quot;,&quot;Ajouter aux signets&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Save Bookmark&quot;,&quot;ENREGISTRER&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Options&quot;,&quot;Masquer Les Options&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;,&quot;Retour En Arrière&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Realwear&quot;,&quot;Realwear&quot;)<br/>        time.sleep(4)<br/>        #voice_commands(&quot;Refresh Page&quot;,&quot;Rafraîchir la page&quot;)<br/>        time.sleep(5)<br/>        Accept_cookies()<br/>        voice_commands(&quot;More Options&quot;,&quot;Plus D&#x27;Options&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Mouse&quot;,&quot;Souris&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Options&quot;,&quot;Masquer Les Options&quot;)<br/>        time.sleep(4)<br/>        voice_commands(&quot;Select item 3&quot;,&quot;Sélectionnez l&#x27;élément 3&quot;)<br/>        time.sleep(4)<br/>&gt;       voice_commands(&quot;More Options&quot;,&quot;Plus D&#x27;Options&quot;)<br/><br/>WebApps_French\test_WebApps_French.py:177: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;More Options&#x27;, text_log = &quot;Plus D&#x27;Options&quot;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;&quot;+time_stamp_screenshot+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text_log+&quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text_log+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;more options&#x27;</span><br/><span class="error">E             - more options</span><br/><br/>WebApps_French\test_WebApps_French.py:95: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Applications Web -&gt; PASS
+Youtube -&gt; PASS
+Rafraîchir la page -&gt; PASS
+Plus D&#x27;Options -&gt; PASS
+Souris -&gt; PASS
+Scanner code bar -&gt; PASS
+Retour En Arrière -&gt; PASS
+Ajouter aux signets -&gt; PASS
+ANNULER -&gt; PASS
+Ajouter aux signets -&gt; PASS
+ENREGISTRER -&gt; PASS
+Masquer Les Options -&gt; PASS
+Retour En Arrière -&gt; PASS
+Realwear -&gt; PASS
+Plus D&#x27;Options -&gt; PASS
+Souris -&gt; PASS
+Masquer Les Options -&gt; PASS
+Sélectionnez l&#x27;élément 3 -&gt; PASS
+Plus D&#x27;Options -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">WirelessUpdate_French/test_WirelessUpdate_French.py::test_WirelessUpdate_French</td>
+          <td class="col-duration">38.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_WirelessUpdate_French():<br/>    <br/>    <br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>    <br/>        #checking menu options<br/>        voice_commands(&quot;Navigate Home&quot;,&quot;Menu Principal&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;,&quot;Mes Programmes&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Select item 8&quot;, &quot;Sélectionnez l&#x27;élément 8&quot;)<br/>        time.sleep(8)<br/>        #voice not detected for wireless update so select item used<br/>        #voice_commands(&quot;Wireless Update&quot;,&quot;&quot;)<br/>        #time.sleep(6)<br/>&gt;       voice_commands(&quot;Select Item 2&quot;,&quot;Sélectionnez l&#x27;élément 2&quot;)<br/><br/>WirelessUpdate_French\test_WirelessUpdate_French.py:134: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;Select Item 2&#x27;, text_log = &quot;Sélectionnez l&#x27;élément 2&quot;<br/><br/>    def voice_commands(text, text_log):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;&quot;+time_stamp_screenshot+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text_log.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text_log+&quot; -&gt; PASS&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text_log+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, text_log)<br/>            worksheet.write(row, col + 5, adb_result)<br/>            worksheet.write(row, col + 6, adb_confidence)<br/>            worksheet.write(row, col + 7, &quot;FAIL&quot;)<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;select item 2&#x27;</span><br/><span class="error">E             - select item 2</span><br/><br/>WirelessUpdate_French\test_WirelessUpdate_French.py:94: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Sélectionnez l&#x27;élément 8 -&gt; PASS
+Sélectionnez l&#x27;élément 2 -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">AboutDevice_French/test_AboutDevice_French.py::test_AboutDevice_French</td>
+          <td class="col-duration">195.29</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Infos sur l&#x27;appareil -&gt; PASS
+VOIR LA LICENCE D&#x27;UTILISATEUR FINAL -&gt; PASS
+Bas de page -&gt; PASS
+page droite -&gt; PASS
+Bas de page -&gt; PASS
+page gauche -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Menu Principal -&gt; PASS
+Applications récentes -&gt; PASS
+Tout rejeter -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Infos sur l&#x27;appareil -&gt; PASS
+AFFICHER LA LICENCE DE SOURCE OUVERTE -&gt; PASS
+Bas de page -&gt; PASS
+page droite -&gt; PASS
+Bas de page -&gt; PASS
+page gauche -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Menu Principal -&gt; PASS
+Applications récentes -&gt; PASS
+Tout rejeter -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">AudioRecorder_French/test_AudioRecorder_French.py::test_AudioRecorder_French</td>
+          <td class="col-duration">223.22</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Enregistreur Audio -&gt; PASS
+Enregistrer l&#x27;audio -&gt; PASS
+Pause l&#x27;enregistrement -&gt; PASS
+Reprendre l&#x27;enregistrement -&gt; PASS
+Pause l&#x27;enregistrement -&gt; PASS
+Arrêter l&#x27;enregistrement -&gt; PASS
+APERÇU -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Tout rejeter -&gt; PASS
+Mes Programmes -&gt; PASS
+Enregistreur Audio -&gt; PASS
+Plus D&#x27;Options -&gt; PASS
+Canal Audio -&gt; PASS
+Canal Audio -&gt; PASS
+Qualité Audio -&gt; PASS
+Basse Qualité -&gt; PASS
+Qualité Audio -&gt; PASS
+Moyenne Qualité -&gt; PASS
+Qualité Audio -&gt; PASS
+Haute Qualité -&gt; PASS
+Temps d&#x27;enregistrement -&gt; PASS
+10 secondes -&gt; PASS
+Temps d&#x27;enregistrement -&gt; PASS
+15 secondes -&gt; PASS
+Temps d&#x27;enregistrement -&gt; PASS
+30 secondes -&gt; PASS
+Temps d&#x27;enregistrement -&gt; PASS
+1 minute -&gt; PASS
+Temps d&#x27;enregistrement -&gt; PASS
+Manuel -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Masquer Les Options -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">BarcodeReader_French/test_BarcodeReader_French.py::test_BarcodeReader_French</td>
+          <td class="col-duration">122.68</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Lecteur De Code Barres -&gt; PASS
+Niveau de zoom 2 -&gt; PASS
+Niveau de zoom 3 -&gt; PASS
+Niveau de zoom 4 -&gt; PASS
+Niveau de zoom 5 -&gt; PASS
+Niveau de zoom 1 -&gt; PASS
+Allumer lampe de poche -&gt; PASS
+Éteindre lampe de poche -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Applications récentes -&gt; PASS
+Retour En Arrière -&gt; PASS
+Menu Principal -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">CloudSync_French/test_CloudSync_French.py::test_ClouldSync_French</td>
+          <td class="col-duration">103.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Synchronisation Cloud -&gt; PASS
+Sélectionnez l&#x27;élément 1 -&gt; PASS
+CONNEXION AVANCÉE -&gt; PASS
+Retour En Arrière -&gt; PASS
+SE CONNECTER -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Tout rejeter -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">ConfigurationApp_French/test_ConfigurationApp_French.py::test_ConfigurationApp_French</td>
+          <td class="col-duration">120.89</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Configuration -&gt; PASS
+Niveau de zoom 2 -&gt; PASS
+Niveau de zoom 3 -&gt; PASS
+Niveau de zoom 4 -&gt; PASS
+Niveau de zoom 5 -&gt; PASS
+Niveau de zoom 1 -&gt; PASS
+Allumer lampe de poche -&gt; PASS
+Éteindre lampe de poche -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Applications récentes -&gt; PASS
+Retour En Arrière -&gt; PASS
+Menu Principal -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">General_Settings_French/test_General_Settings_French.py::test_General_Setings_French</td>
+          <td class="col-duration">496.42</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Paramètres -&gt; PASS
+Réseau et Internet -&gt; PASS
+Wi Fi -&gt; PASS
+Retour En Arrière -&gt; PASS
+Retour En Arrière -&gt; PASS
+Appareils connectés -&gt; PASS
+USB -&gt; PASS
+Retour En Arrière -&gt; PASS
+Associer un appareil -&gt; PASS
+Retour En Arrière -&gt; PASS
+Préférences de connexion -&gt; PASS
+Retour En Arrière -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applis et notifications -&gt; PASS
+Retour En Arrière -&gt; PASS
+Batterie -&gt; PASS
+Retour En Arrière -&gt; PASS
+Écran -&gt; PASS
+Niveau de luminosité -&gt; PASS
+Retour En Arrière -&gt; PASS
+Éclairage nocturne -&gt; PASS
+Retour En Arrière -&gt; PASS
+Délai de mise en veille de l&#x27;écran -&gt; PASS
+30secondes -&gt; PASS
+Délai de mise en veille de l&#x27;écran -&gt; PASS
+5minutes -&gt; PASS
+Délai de mise en veille de l&#x27;écran -&gt; PASS
+10minutes -&gt; PASS
+Délai de mise en veille de l&#x27;écran -&gt; PASS
+30minutes -&gt; PASS
+Délai de mise en veille de l&#x27;écran -&gt; PASS
+ANNULER -&gt; PASS
+Bas de page -&gt; PASS
+Préférences avancées -&gt; PASS
+Taille de la police -&gt; PASS
+Retour En Arrière -&gt; PASS
+Retour En Arrière -&gt; PASS
+Son -&gt; PASS
+Retour En Arrière -&gt; PASS
+Bas de page -&gt; PASS
+Stockage -&gt; PASS
+Retour En Arrière -&gt; PASS
+Confidentialité -&gt; PASS
+Utilisation de l&#x27;accessibilité -&gt; PASS
+OK -&gt; PASS
+Gestionnaire d&#x27;autorisations -&gt; PASS
+Retour En Arrière -&gt; PASS
+Afficher les mots de passe -&gt; PASS
+Afficher les mots de passe -&gt; PASS
+Écran de verrouillage -&gt; PASS
+Retour En Arrière -&gt; PASS
+Retour En Arrière -&gt; PASS
+Localisation -&gt; PASS
+Utiliser ma position -&gt; PASS
+Utiliser ma position -&gt; PASS
+Retour En Arrière -&gt; PASS
+Sécurité -&gt; PASS
+Retour En Arrière -&gt; PASS
+Comptes -&gt; PASS
+Retour En Arrière -&gt; PASS
+Accessibilité -&gt; PASS
+Retour En Arrière -&gt; PASS
+RealWear -&gt; PASS
+Mode Bluetooth -&gt; PASS
+Mode Bluetooth -&gt; PASS
+Mode de stockage -&gt; PASS
+Mode de stockage -&gt; PASS
+Caméra Basse Lumière -&gt; PASS
+Caméra Basse Lumière -&gt; PASS
+Caméra champ de vision -&gt; PASS
+Caméra champ de vision -&gt; PASS
+Caméra Stabilisation de l&#x27;image -&gt; PASS
+Caméra Stabilisation de l&#x27;image -&gt; PASS
+Retour En Arrière -&gt; PASS
+Bas de page -&gt; PASS
+Système -&gt; PASS
+Retour En Arrière -&gt; PASS
+Sélectionnez l&#x27;élément 7 -&gt; PASS
+informations d&#x27;urgence -&gt; PASS
+Retour En Arrière -&gt; PASS
+modèle -&gt; PASS
+Retour En Arrière -&gt; PASS
+Bas de page -&gt; PASS
+version d&#x27;android -&gt; PASS
+Retour En Arrière -&gt; PASS
+Bas de page -&gt; PASS
+numéro de build -&gt; PASS
+Retour En Arrière -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">GlobalCommands_French/test_GlobalCommands_French.py::test_GlobalCommands_French</td>
+          <td class="col-duration">724.22</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Menu Principal -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Infos sur l&#x27;appareil -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Enregistreur Audio -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Lecteur De Code Barres -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Synchronisation Cloud -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Configuration -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Mon appareil photo -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Mes Fichiers -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Mes Paramètres -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+TETROMINOS -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Applications Web -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Programmes -&gt; PASS
+Sélectionnez l&#x27;élément 8 -&gt; PASS
+Afficher l&#x27;aide -&gt; PASS
+Masquer l&#x27;aide -&gt; PASS
+Afficher Les Notifications -&gt; PASS
+Masquer Les Notifications -&gt; PASS
+Mes paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Menu Principal -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">MyControls_French/test_MyControls_French.py::test_MyControls_French</td>
+          <td class="col-duration">496.22</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Menu Principal -&gt; PASS
+Mes paramètres -&gt; PASS
+Souris -&gt; PASS
+Rotation automatique -&gt; PASS
+Bouton d&#x27;action -&gt; PASS
+Capteur de bruits -&gt; PASS
+Bouton d&#x27;action -&gt; PASS
+Écran d&#x27;accueil -&gt; PASS
+Options d&#x27;alimentation -&gt; PASS
+Mes paramètres -&gt; PASS
+Indicateurs -&gt; PASS
+5 Secondes -&gt; PASS
+Indicateurs -&gt; PASS
+10 Secondes -&gt; PASS
+Indicateurs -&gt; PASS
+Ne Disparais Jamais -&gt; PASS
+Indicateurs -&gt; PASS
+3 Secondes -&gt; PASS
+Menu Principal -&gt; PASS
+Mes paramètres -&gt; PASS
+Bluetooth -&gt; PASS
+Paramètres Bluetooth -&gt; PASS
+Menu Principal -&gt; PASS
+Mes paramètres -&gt; PASS
+Réseau sans fil -&gt; PASS
+Paramètres du réseau sans fil -&gt; PASS
+Retour En Arrière -&gt; PASS
+Menu Principal -&gt; PASS
+Mes paramètres -&gt; PASS
+Lampe de poche -&gt; PASS
+Lampe de poche -&gt; PASS
+Retour En Arrière -&gt; PASS
+Mes paramètres -&gt; PASS
+Luminosité -&gt; PASS
+Niveau 1 -&gt; PASS
+Luminosité -&gt; PASS
+Niveau 2 -&gt; PASS
+Luminosité -&gt; PASS
+Niveau 3 -&gt; PASS
+Luminosité -&gt; PASS
+Niveau 5 -&gt; PASS
+Luminosité -&gt; PASS
+Niveau 6 -&gt; PASS
+Luminosité -&gt; PASS
+Niveau 7 -&gt; PASS
+Luminosité -&gt; PASS
+Niveau 8 -&gt; PASS
+Luminosité -&gt; PASS
+Niveau 9 -&gt; PASS
+Luminosité -&gt; PASS
+Niveau 10 -&gt; PASS
+Luminosité -&gt; PASS
+Niveau 4 -&gt; PASS
+Menu Principal -&gt; PASS
+Mes paramètres -&gt; PASS
+Volume -&gt; PASS
+Niveau 1 -&gt; PASS
+Volume -&gt; PASS
+Niveau 2 -&gt; PASS
+Volume -&gt; PASS
+Niveau 3 -&gt; PASS
+Volume -&gt; PASS
+Niveau 4 -&gt; PASS
+Volume -&gt; PASS
+Niveau 6 -&gt; PASS
+Volume -&gt; PASS
+Niveau 7 -&gt; PASS
+Volume -&gt; PASS
+Niveau 8 -&gt; PASS
+Volume -&gt; PASS
+Niveau 9 -&gt; PASS
+Volume -&gt; PASS
+Niveau 10 -&gt; PASS
+Volume -&gt; PASS
+Niveau 5 -&gt; PASS
+Mode couleur -&gt; PASS
+Mode couleur -&gt; PASS
+Dictée -&gt; PASS
+Dictée -&gt; PASS
+Commande aide -&gt; PASS
+Commande aide -&gt; PASS
+Mode de Mise en Page -&gt; PASS
+Bas de page -&gt; PASS
+Mode de Mise en Page -&gt; PASS
+Autres paramètres -&gt; PASS
+Retour En Arrière -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">MyFiles_French/test_MyFiles_French.py::test_MyFiles_French</td>
+          <td class="col-duration">345.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Menu Principal -&gt; PASS
+Mes Fichiers -&gt; PASS
+Mes Médias -&gt; PASS
+Retour En Arrière -&gt; PASS
+Mes Documents -&gt; PASS
+Retour En Arrière -&gt; PASS
+Mes Photos -&gt; PASS
+Retour En Arrière -&gt; PASS
+Mes Téléchargements -&gt; PASS
+Retour En Arrière -&gt; PASS
+Mes Disques -&gt; PASS
+Mon Appareil -&gt; PASS
+Retour d&#x27;un niveau -&gt; PASS
+Retour En Arrière -&gt; PASS
+Applications récentes -&gt; PASS
+Tout rejeter -&gt; PASS
+Menu Principal -&gt; PASS
+Mon appareil photo -&gt; PASS
+Prendre une Photo -&gt; PASS
+Menu Principal -&gt; PASS
+Mes Fichiers -&gt; PASS
+Mes Photos -&gt; PASS
+Camera -&gt; PASS
+Sélectionnez l&#x27;élément 1 -&gt; PASS
+Niveau de zoom 2 -&gt; PASS
+Niveau de zoom 1 -&gt; PASS
+Niveau de zoom 4 -&gt; PASS
+Niveau de zoom 5 -&gt; PASS
+Niveau de zoom 3 -&gt; PASS
+Gel écran -&gt; PASS
+Déblocage écran -&gt; PASS
+Réinitialiser la fenêtre -&gt; PASS
+Retour En Arrière -&gt; PASS
+Retour d&#x27;un niveau -&gt; PASS
+Plus D&#x27;Options -&gt; PASS
+Trier les fichiers -&gt; PASS
+Par date -&gt; PASS
+Trier les fichiers -&gt; PASS
+Par nom -&gt; PASS
+Masquer Les Options -&gt; PASS
+Camera -&gt; PASS
+Plus D&#x27;Options -&gt; PASS
+Mode édition -&gt; PASS
+Sélectionnez l&#x27;élément 1 -&gt; PASS
+Supprimer la sélection -&gt; PASS
+CONFIRMER -&gt; PASS
+Applications récentes -&gt; PASS
+Tout rejeter -&gt; PASS
+Mes Fichiers -&gt; PASS
+Mes Documents -&gt; PASS
+Sélectionnez l&#x27;élément 1 -&gt; PASS
+Niveau de zoom 3 -&gt; PASS
+Niveau de zoom 1 -&gt; PASS
+Niveau de zoom 4 -&gt; PASS
+Niveau de zoom 5 -&gt; PASS
+Niveau de zoom 2 -&gt; PASS
+Gel écran -&gt; PASS
+Déblocage écran -&gt; PASS
+Réinitialiser la fenêtre -&gt; PASS
+<br/></div></td></tr></tbody></table></body></html>

@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report1.html</h1>
+    <p>Report generated on 25-May-2021 at 12:56:20 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk-11.0.10</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "0.13.1", "py": "1.10.0", "pytest": "6.2.3"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19041-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "metadata": "1.11.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.9.4</td></tr></table>
+    <h2>Summary</h2>
+    <p>12 tests ran in 2761.45 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">5 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">7 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">AboutDevice/test_AboutDevice.py::test_AboutDevice</td>
+          <td class="col-duration">25.52</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_AboutDevice():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Home&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;About Device&quot;)<br/><br/>AboutDevice\test_AboutDevice.py:123: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;About Device&#x27;<br/><br/>    def voice_commands(text):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>    <br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>        if text.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text+&quot; -&gt; PASS&quot;)<br/>            assert adb_result.lower() == text.lower()<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, adb_result)<br/>            worksheet.write(row, col + 5, adb_confidence)<br/>            worksheet.write(row, col + 6, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, adb_result)<br/>            worksheet.write(row, col + 5, adb_confidence)<br/>            worksheet.write(row, col + 6, &quot;FAIL&quot;)<br/>            row += 1<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;about device&#x27;</span><br/><span class="error">E             - about device</span><br/><br/>AboutDevice\test_AboutDevice.py:93: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+About Device -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">AudioRecorder/test_AudioRecorder.py::test_AudioRecorder</td>
+          <td class="col-duration">30.62</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_AudioRecorder():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        #main UI<br/>        voice_commands(&quot;Navigate Home&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Audio Recorder&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;Record Audio&quot;)<br/><br/>AudioRecorder\test_AudioRecorder.py:124: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;Record Audio&#x27;<br/><br/>    def voice_commands(text):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>    <br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>        if text.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text+&quot; -&gt; PASS&quot;)<br/>            assert adb_result.lower() == text.lower()<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, adb_result)<br/>            worksheet.write(row, col + 5, adb_confidence)<br/>            worksheet.write(row, col + 6, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, adb_result)<br/>            worksheet.write(row, col + 5, adb_confidence)<br/>            worksheet.write(row, col + 6, &quot;FAIL&quot;)<br/>            row += 1<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;record audio&#x27;</span><br/><span class="error">E             - record audio</span><br/><br/>AudioRecorder\test_AudioRecorder.py:92: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Audio Recorder -&gt; PASS
+Record Audio -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">CloudSync/test_CloudSync.py::test_ClouldSync</td>
+          <td class="col-duration">86.13</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_ClouldSync():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Home&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Cloud Sync&quot;)<br/>        time.sleep(3)<br/>        voice_commands(&quot;Select Item 1&quot;)<br/>        time.sleep(3)<br/>        voice_commands(&quot;ADVANCED SIGN In&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Navigate Back&quot;)<br/>        time.sleep(4)<br/>        voice_commands(&quot;Sign In&quot;)<br/>        time.sleep(4)<br/>    <br/>        &quot;&quot;&quot;<br/>        #keyboard verification<br/>        voice_commands(&quot;Select Item 1&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Symbols&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Letters&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;ABC MODE&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Numbers&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;)<br/>        time.sleep(4)<br/>        &quot;&quot;&quot;<br/>        #Gobal commands on sign in page<br/>        voice_commands(&quot;Show Help&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Help&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Show Notifications&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Notifications&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Controls&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;Navigate Back&quot;)<br/><br/>CloudSync\test_CloudSync.py:159: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;Navigate Back&#x27;<br/><br/>    def voice_commands(text):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>    <br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>        if text.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text+&quot; -&gt; PASS&quot;)<br/>            assert adb_result.lower() == text.lower()<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, adb_result)<br/>            worksheet.write(row, col + 5, adb_confidence)<br/>            worksheet.write(row, col + 6, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, adb_result)<br/>            worksheet.write(row, col + 5, adb_confidence)<br/>            worksheet.write(row, col + 6, &quot;FAIL&quot;)<br/>            row += 1<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;navigate back&#x27;</span><br/><span class="error">E             - navigate back</span><br/><br/>CloudSync\test_CloudSync.py:92: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Cloud Sync -&gt; PASS
+Select Item 1 -&gt; PASS
+ADVANCED SIGN In -&gt; PASS
+Navigate Back -&gt; PASS
+Sign In -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">ConfigurationApp/test_ConfigurationApp.py::test_ConfigurationApp</td>
+          <td class="col-duration">38.49</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_ConfigurationApp():<br/>    #def test_ConfigurationAppLaunching():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Home&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Configuration&quot;)<br/>        time.sleep(2)<br/>    <br/>    #def test_ConfigurationAppZoomLevels():<br/>        voice_commands(&quot;Zoom Level 2&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;Zoom Level 3&quot;)<br/><br/>ConfigurationApp\test_ConfigurationApp.py:129: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;Zoom Level 3&#x27;<br/><br/>    def voice_commands(text):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>    <br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>    <br/>        if text.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text+&quot; -&gt; PASS&quot;)<br/>            assert adb_result.lower() == text.lower()<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, adb_result)<br/>            worksheet.write(row, col + 5, adb_confidence)<br/>            worksheet.write(row, col + 6, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, adb_result)<br/>            worksheet.write(row, col + 5, adb_confidence)<br/>            worksheet.write(row, col + 6, &quot;FAIL&quot;)<br/>            row += 1<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;zoom level 3&#x27;</span><br/><span class="error">E             - zoom level 3</span><br/><br/>ConfigurationApp\test_ConfigurationApp.py:93: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Configuration -&gt; PASS
+Zoom Level 2 -&gt; PASS
+Zoom Level 3 -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">MyCamera/test_MyCamera.py::test_MyCamera</td>
+          <td class="col-duration">118.63</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_MyCamera():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Programs&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Camera&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Take Photo&quot;)<br/>        time.sleep(4)<br/>        voice_commands(&quot;Preview&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;zoom level 2&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;zoom level 3&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;zoom level 4&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;zoom level 5&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Freeze Window&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Control Window&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;zoom level 1&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Delete&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Confirm&quot;)<br/>        time.sleep(2)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Recent Applications&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Dismiss All&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Camera&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Take Photo&quot;)<br/>        time.sleep(10)<br/>&gt;       voice_commands(&quot;My Files&quot;)<br/><br/>MyCamera\test_MyCamera.py:153: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;My Files&#x27;<br/><br/>    def voice_commands(text):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>    <br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>        if text.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text+&quot; -&gt; PASS&quot;)<br/>            assert adb_result.lower() == text.lower()<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, adb_result)<br/>            worksheet.write(row, col + 5, adb_confidence)<br/>            worksheet.write(row, col + 6, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, adb_result)<br/>            worksheet.write(row, col + 5, adb_confidence)<br/>            worksheet.write(row, col + 6, &quot;FAIL&quot;)<br/>            row += 1<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;my files&#x27;</span><br/><span class="error">E             - my files</span><br/><br/>MyCamera\test_MyCamera.py:92: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>My Programs -&gt; PASS
+My Camera -&gt; PASS
+Take Photo -&gt; PASS
+Preview -&gt; PASS
+zoom level 2 -&gt; PASS
+zoom level 3 -&gt; PASS
+zoom level 4 -&gt; PASS
+zoom level 5 -&gt; PASS
+Freeze Window -&gt; PASS
+Control Window -&gt; PASS
+zoom level 1 -&gt; PASS
+Delete -&gt; PASS
+Confirm -&gt; PASS
+Recent Applications -&gt; PASS
+Dismiss All -&gt; PASS
+My Camera -&gt; PASS
+Take Photo -&gt; PASS
+My Files -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">MyControls/test_MyControls.py::test_MyControls</td>
+          <td class="col-duration">348.92</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_MyControls():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>    <br/>        voice_commands(&quot;Navigate Home&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Controls&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Mouse&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Auto Rotate&quot;)<br/>        time.sleep(2)<br/>    <br/>        voice_commands(&quot;Action Button&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Noise Capture&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Action Button&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Homescreen&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Power Options&quot;)<br/>        time.sleep(4)<br/>    <br/>        voice_commands(&quot;My Controls&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;WearML Indicators&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Fade 5 Seconds&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;WearML Indicators&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Fade 10 Seconds&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;WearML Indicators&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Fade never&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;WearML Indicators&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Fade 3 Seconds&quot;)<br/>        time.sleep(4)<br/>        voice_commands(&quot;Navigate Home&quot;)<br/>        time.sleep(2)<br/>    <br/>        voice_commands(&quot;My Controls&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Bluetooth&quot;)<br/>        time.sleep(1)<br/>        &quot;&quot;&quot;<br/>        voice_commands(&quot;Enable&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Bluetooth&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Disable&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Bluetooth&quot;)<br/>        time.sleep(1)<br/>        &quot;&quot;&quot;<br/>        voice_commands(&quot;Bluetooth settings&quot;)<br/>        time.sleep(3)<br/>        voice_commands(&quot;Navigate Home&quot;)<br/>        time.sleep(2)<br/>    <br/>        voice_commands(&quot;My Controls&quot;)<br/>        time.sleep(3)<br/>        voice_commands(&quot;Wireless Network&quot;)<br/>        time.sleep(1)<br/>        &quot;&quot;&quot;<br/>        voice_commands(&quot;Disable&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Wireless Network&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Enable&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Wireless Network&quot;)<br/>        time.sleep(1)<br/>        &quot;&quot;&quot;<br/>        voice_commands(&quot;Wireless Network settings&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Navigate Back&quot;)<br/>        time.sleep(2)<br/>    <br/>        voice_commands(&quot;Navigate Home&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Controls&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Preferred Network&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;)<br/>        time.sleep(3)<br/>        #flashlight<br/>        voice_commands(&quot;Navigate Home&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Controls&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Flashlight&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Flashlight&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate Back&quot;)<br/>        time.sleep(2)<br/>    <br/>        #Brightness<br/>        voice_commands(&quot;My Controls&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Brightness&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Set level 1&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Brightness&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Set level 2&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Brightness&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Set level 3&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Brightness&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Set level 5&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Brightness&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Set level 6&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Brightness&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Set level 7&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Brightness&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Set level 8&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Brightness&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Set level 9&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Brightness&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Set level 10&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Brightness&quot;)<br/>        time.sleep(1)<br/>        voice_commands(&quot;Set level 4&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Navigate Home&quot;)<br/>        time.sleep(2)<br/>    <br/>        #Volume<br/>        voice_commands(&quot;My Controls&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;Volume&quot;)<br/><br/>MyControls\test_MyControls.py:267: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>text = &#x27;Volume&#x27;<br/><br/>    def voice_commands(text):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>    <br/>        try:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/>            time.sleep(1)<br/>        except:<br/>            playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>            time.sleep(1)<br/>        ts = time.time()<br/>        time_stamp = datetime.datetime.fromtimestamp(ts).strftime(&#x27;-%d-%m-%Y-%H-%M-%S&#x27;)<br/>        adb_screenshot = &quot;adb exec-out screencap -p &gt; Screenshots/\&quot;&quot;+TC_Name+&quot;\&quot;/\&quot;&quot;+text+&quot;\&quot;&quot;+time_stamp+&quot;.png&quot;<br/>        os.system(adb_screenshot)<br/>        adb_fetch = &quot;adb shell logcat -d | find \&quot;(ACCEPTED)\&quot;&quot;<br/>        adb_ps = subprocess.Popen(adb_fetch, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_result = adb_ps.communicate()[0]<br/>        adb_result = adb_result.decode(&quot;utf-8&quot;)<br/>        try:<br/>            adb_confidence = re.search(r&quot;\[(.*?)\]&quot;, adb_result).group(1)<br/>            adb_timestamp = re.search(r&quot;\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}&quot;, adb_result).group(0)<br/>            adb_result = re.search(r&quot;\)(.*?)\[&quot;, adb_result).group(1)<br/>        except AttributeError:<br/>            adb_result = &quot;&quot;<br/>            adb_confidence = &quot;&quot;<br/>            adb_timestamp = &quot;&quot;<br/>        adb_result = adb_result[1:-1]<br/>        if text.lower() == adb_result.lower():<br/>            print(&quot;&quot;+text+&quot; -&gt; PASS&quot;)<br/>            assert adb_result.lower() == text.lower()<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, adb_result)<br/>            worksheet.write(row, col + 5, adb_confidence)<br/>            worksheet.write(row, col + 6, &quot;PASS&quot;)<br/>            row += 1<br/>        else:<br/>            print(&quot;&quot;+text+&quot; -&gt; FAIL&quot;)<br/>            worksheet.write(row, col, adb_timestamp)<br/>            worksheet.write(row, col + 1, adb_platform)<br/>            worksheet.write(row, col + 2, adb_bspversion)<br/>            worksheet.write(row, col + 3, text)<br/>            worksheet.write(row, col + 4, adb_result)<br/>            worksheet.write(row, col + 5, adb_confidence)<br/>            worksheet.write(row, col + 6, &quot;FAIL&quot;)<br/>            row += 1<br/>            workbook.close()  # will save the result till it executed in current script<br/>&gt;           assert adb_result.lower() == text.lower()  # will terminate execution if failure occurs<br/><span class="error">E           AssertionError: assert &#x27;&#x27; == &#x27;volume&#x27;</span><br/><span class="error">E             - volume</span><br/><br/>MyControls\test_MyControls.py:92: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>Navigate Home -&gt; PASS
+My Controls -&gt; PASS
+Mouse -&gt; PASS
+Auto Rotate -&gt; PASS
+Action Button -&gt; PASS
+Noise Capture -&gt; PASS
+Action Button -&gt; PASS
+Homescreen -&gt; PASS
+Power Options -&gt; PASS
+My Controls -&gt; PASS
+WearML Indicators -&gt; PASS
+Fade 5 Seconds -&gt; PASS
+WearML Indicators -&gt; PASS
+Fade 10 Seconds -&gt; PASS
+WearML Indicators -&gt; PASS
+Fade never -&gt; PASS
+WearML Indicators -&gt; PASS
+Fade 3 Seconds -&gt; PASS
+Navigate Home -&gt; PASS
+My Controls -&gt; PASS
+Bluetooth -&gt; PASS
+Bluetooth settings -&gt; PASS
+Navigate Home -&gt; PASS
+My Controls -&gt; PASS
+Wireless Network -&gt; PASS
+Wireless Network settings -&gt; PASS
+Navigate Back -&gt; PASS
+Navigate Home -&gt; PASS
+My Controls -&gt; PASS
+Preferred Network -&gt; PASS
+Navigate Back -&gt; PASS
+Navigate Home -&gt; PASS
+My Controls -&gt; PASS
+Flashlight -&gt; PASS
+Flashlight -&gt; PASS
+Navigate Back -&gt; PASS
+My Controls -&gt; PASS
+Brightness -&gt; PASS
+Set level 1 -&gt; PASS
+Brightness -&gt; PASS
+Set level 2 -&gt; PASS
+Brightness -&gt; PASS
+Set level 3 -&gt; PASS
+Brightness -&gt; PASS
+Set level 5 -&gt; PASS
+Brightness -&gt; PASS
+Set level 6 -&gt; PASS
+Brightness -&gt; PASS
+Set level 7 -&gt; PASS
+Brightness -&gt; PASS
+Set level 8 -&gt; PASS
+Brightness -&gt; PASS
+Set level 9 -&gt; PASS
+Brightness -&gt; PASS
+Set level 10 -&gt; PASS
+Brightness -&gt; PASS
+Set level 4 -&gt; PASS
+Navigate Home -&gt; PASS
+My Controls -&gt; PASS
+Volume -&gt; FAIL
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">MyFiles/test_MyFiles.py::test_MyFiles</td>
+          <td class="col-duration">322.64</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">text = &#x27;EDIT MODE&#x27;<br/><br/>    def voice_commands(text):<br/>        global row<br/>        global col<br/>        adb_clear = &quot;adb shell logcat -c&quot;<br/>        os.system(adb_clear)<br/>        adb_devinfo = &quot;adb shell getprop ro.product.version.software&quot;<br/>        adb_process = subprocess.Popen(adb_devinfo, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)<br/>        adb_bspversion = adb_process.communicate()[0]<br/>        adb_bspversion = adb_bspversion.decode(&quot;utf-8&quot;)<br/>        adb_platform = re.search(r&#x27;^\w+&#x27;, str(adb_bspversion)).group(0)<br/>    <br/>        try:<br/>&gt;           playsound(&#x27;Tones/&#x27;+text+&#x27;.wav&#x27;)<br/><br/>MyFiles\test_MyFiles.py:48: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>sound = &#x27;Tones/EDIT MODE.wav&#x27;, block = True<br/><br/>    def _playsoundWin(sound, block = True):<br/>        &#x27;&#x27;&#x27;<br/>        Utilizes windll.winmm. Tested and known to work with MP3 and WAVE on<br/>        Windows 7 with Python 2.7. Probably works with more file formats.<br/>        Probably works on Windows XP thru Windows 10. Probably works with all<br/>        versions of Python.<br/>    <br/>        Inspired by (but not copied from) Michael Gundlach &lt;gundlach@gmail.com&gt;&#x27;s mp3play:<br/>        https://github.com/michaelgundlach/mp3play<br/>    <br/>        I never would have tried using windll.winmm without seeing his code.<br/>        &#x27;&#x27;&#x27;<br/>        from ctypes import c_buffer, windll<br/>        from random import random<br/>        from time   import sleep<br/>        from sys    import getfilesystemencoding<br/>    <br/>        def winCommand(*command):<br/>            buf = c_buffer(255)<br/>            command = &#x27; &#x27;.join(command).encode(getfilesystemencoding())<br/>            errorCode = int(windll.winmm.mciSendStringA(command, buf, 254, 0))<br/>            if errorCode:<br/>                errorBuffer = c_buffer(255)<br/>                windll.winmm.mciGetErrorStringA(errorCode, errorBuffer, 254)<br/>                exceptionMessage = (&#x27;\n    Error &#x27; + str(errorCode) + &#x27; for command:&#x27;<br/>                                    &#x27;\n        &#x27; + command.decode() +<br/>                                    &#x27;\n    &#x27; + errorBuffer.value.decode())<br/>                raise PlaysoundException(exceptionMessage)<br/>            return buf.value<br/>    <br/>        alias = &#x27;playsound_&#x27; + str(random())<br/>&gt;       winCommand(&#x27;open &quot;&#x27; + sound + &#x27;&quot; alias&#x27;, alias)<br/><br/>..\..\..\..\appdata\local\programs\python\lib\site-packages\playsound.py:35: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>command = b&#x27;open &quot;Tones/EDIT MODE.wav&quot; alias playsound_0.16841472160015347&#x27;<br/>buf = &lt;ctypes.c_char_Array_255 object at 0x00000188D0502D40&gt;, errorCode = 275<br/>errorBuffer = &lt;ctypes.c_char_Array_255 object at 0x00000188D05029C0&gt;<br/><br/>    def winCommand(*command):<br/>        buf = c_buffer(255)<br/>        command = &#x27; &#x27;.join(command).encode(getfilesystemencoding())<br/>        errorCode = int(windll.winmm.mciSendStringA(command, buf, 254, 0))<br/>        if errorCode:<br/>            errorBuffer = c_buffer(255)<br/>            windll.winmm.mciGetErrorStringA(errorCode, errorBuffer, 254)<br/>            exceptionMessage = (&#x27;\n    Error &#x27; + str(errorCode) + &#x27; for command:&#x27;<br/>                                &#x27;\n        &#x27; + command.decode() +<br/>                                &#x27;\n    &#x27; + errorBuffer.value.decode())<br/>&gt;           raise PlaysoundException(exceptionMessage)<br/><span class="error">E           playsound.PlaysoundException: </span><br/><span class="error">E               Error 275 for command:</span><br/><span class="error">E                   open &quot;Tones/EDIT MODE.wav&quot; alias playsound_0.16841472160015347</span><br/><span class="error">E               Cannot find the specified file.  Make sure the path and filename are correct.</span><br/><br/>..\..\..\..\appdata\local\programs\python\lib\site-packages\playsound.py:31: PlaysoundException<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>    def test_MyFiles():<br/>        device_wakeup()<br/>        close_recent_applications()<br/>        time.sleep(2)<br/>        #first level UI<br/>        voice_commands(&quot;Navigate Home&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Files&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Media&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Documents&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Photos&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Downloads&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My Drives&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My device&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Alarms&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;DCIM&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Documents&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Download&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Manage&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Movies&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;)<br/>        time.sleep(2)<br/>        #voice_commands(&quot;Music&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Navigate back&quot;)<br/>        #time.sleep(2)<br/>        voice_commands(&quot;Notifications&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Pictures&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Back One level&quot;)<br/>        time.sleep(2)<br/>        #voice_commands(&quot;Podcasts&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Back One level&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Realwear&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Navigate back&quot;)<br/>        #time.sleep(2)<br/>        #voice_commands(&quot;Ringtones&quot;)<br/>        #time.sleep(2)<br/>        voice_commands(&quot;Recent Applications&quot;)<br/>        time.sleep(3)<br/>        voice_commands(&quot;Dismiss All&quot;)<br/>        time.sleep(2)<br/>    <br/>        #Verify to Open My Photos<br/>        voice_commands(&quot;Navigate HOME&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;My CAMERA&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Take Photo&quot;)<br/>        time.sleep(5)<br/>        voice_commands(&quot;Navigate Home&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;MY FILES&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;MY PHOTOS&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;CAMERA&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;SELECT ITEM 1&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;ZOOM LEVEL 2&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;ZOOM LEVEL 1&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;ZOOM LEVEL 4&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;ZOOM LEVEL 5&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;ZOOM LEVEL 3&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;FREEZE WINDOW&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;CONTROL WINDOW&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;RESET WINDOW&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Navigate back&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Back one level&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;MORE OPTIONS&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;SORT FILES&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;BY DATE&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Sort Files&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;By Name&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Hide Options&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;Camera&quot;)<br/>        time.sleep(2)<br/>        voice_commands(&quot;MORE OPTIONS&quot;)<br/>        time.sleep(2)<br/>&gt;       voice_commands(&quot;EDIT MODE&quot;)<br/><br/>MyFiles\test_MyFiles.py:247: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>MyFiles\test_MyFiles.py:51: in voice_commands<br/>    playsound(&#x27;Tones/&#x27;+text+&#x27;.mp3&#x27;)<br/>..\..\..\..\appdata\local\programs\python\lib\site-packages\playsound.py:35: in _playsoundWin<br/>    winCommand(&#x27;open &quot;&#x27; + sound + &#x27;&quot; alias&#x27;, alias)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>command = b&#x27;open &quot;Tones/EDIT MODE.mp3&quot; alias playsound_0.553924010143323&#x27;<br/>buf = &lt;ctypes.c_char_Array_255 object at 0x00000188D9DC5040&gt;, errorCode = 275<br/>errorBuffer = &lt;ctypes.c_char_Array_255 object at 0x00000188D9DC50C0&gt;<br/><br/>    def winCommand(*command):<br/>        buf = c_buffer(255)<br/>        command = &#x27; &#x27;.join(command).encode(getfilesystemencoding())<br/>        errorCode = int(windll.winmm.mciSendStringA(command, buf, 254, 0))<br/>        if errorCode:<br/>            errorBuffer = c_buffer(255)<br/>            windll.winmm.mciGetErrorStringA(errorCode, errorBuffer, 254)<br/>            exceptionMessage = (&#x27;\n    Error &#x27; + str(errorCode) + &#x27; for command:&#x27;<br/>                                &#x27;\n        &#x27; + command.decode() +<br/>                                &#x27;\n    &#x27; + errorBuffer.value.decode())<br/>&gt;           raise PlaysoundException(exceptionMessage)<br/><span class="error">E           playsound.PlaysoundException: </span><br/><span class="error">E               Error 275 for command:</span><br/><span class="error">E                   open &quot;Tones/EDIT MODE.mp3&quot; alias playsound_0.553924010143323</span><br/><span class="error">E               Cannot find the specified file.  Make sure the path and filename are correct.</span><br/><br/>..\..\..\..\appdata\local\programs\python\lib\site-packages\playsound.py:31: PlaysoundException<br/> ------------------------------Captured stdout call------------------------------ <br/>Navigate Home -&gt; PASS
+My Files -&gt; PASS
+My Media -&gt; PASS
+Navigate back -&gt; PASS
+My Documents -&gt; PASS
+Navigate back -&gt; PASS
+My Photos -&gt; PASS
+Navigate back -&gt; PASS
+My Downloads -&gt; PASS
+Navigate back -&gt; PASS
+My Drives -&gt; PASS
+My device -&gt; PASS
+Alarms -&gt; PASS
+Navigate back -&gt; PASS
+DCIM -&gt; PASS
+Navigate back -&gt; PASS
+Documents -&gt; PASS
+Navigate back -&gt; PASS
+Download -&gt; PASS
+Navigate back -&gt; PASS
+Manage -&gt; PASS
+Navigate back -&gt; PASS
+Movies -&gt; PASS
+Navigate back -&gt; PASS
+Notifications -&gt; PASS
+Navigate back -&gt; PASS
+Pictures -&gt; PASS
+Back One level -&gt; PASS
+Recent Applications -&gt; PASS
+Dismiss All -&gt; PASS
+Navigate HOME -&gt; PASS
+My CAMERA -&gt; PASS
+Take Photo -&gt; PASS
+Navigate Home -&gt; PASS
+MY FILES -&gt; PASS
+MY PHOTOS -&gt; PASS
+CAMERA -&gt; PASS
+SELECT ITEM 1 -&gt; PASS
+ZOOM LEVEL 2 -&gt; PASS
+ZOOM LEVEL 1 -&gt; PASS
+ZOOM LEVEL 4 -&gt; PASS
+ZOOM LEVEL 5 -&gt; PASS
+ZOOM LEVEL 3 -&gt; PASS
+FREEZE WINDOW -&gt; PASS
+CONTROL WINDOW -&gt; PASS
+RESET WINDOW -&gt; PASS
+Navigate back -&gt; PASS
+Back one level -&gt; PASS
+MORE OPTIONS -&gt; PASS
+SORT FILES -&gt; PASS
+BY DATE -&gt; PASS
+Sort Files -&gt; PASS
+By Name -&gt; PASS
+Hide Options -&gt; PASS
+Camera -&gt; PASS
+MORE OPTIONS -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">BarcodeReader/test_BarcodeReader.py::test_BarcodeReaderApp</td>
+          <td class="col-duration">119.80</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Barcode Reader -&gt; PASS
+Zoom Level 2 -&gt; PASS
+Zoom Level 3 -&gt; PASS
+Zoom Level 4 -&gt; PASS
+Zoom Level 5 -&gt; PASS
+Zoom Level 1 -&gt; PASS
+Flashlight On -&gt; PASS
+Flashlight Off -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Back -&gt; PASS
+Navigate Home -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">General_Settings/test_General_Settings.py::test_General_Setings</td>
+          <td class="col-duration">503.35</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Navigate Home
+Navigate Home
+Navigate Home -&gt; PASS
+My Programs
+My Programs
+My Programs -&gt; PASS
+Settings
+Settings
+Settings -&gt; PASS
+Network and Internet
+Network and Internet
+Network and Internet -&gt; PASS
+Wireless Networks
+Wireless Networks
+Wireless Networks -&gt; PASS
+Navigate back
+Navigate Back
+Navigate back -&gt; PASS
+Navigate back
+Navigate Back
+Navigate back -&gt; PASS
+Connected devices
+Connected devices
+Connected devices -&gt; PASS
+USB
+USB
+USB -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Pair new device
+Pair new device
+Pair new device -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Connection preferences
+Connection preferences
+Connection preferences -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Apps and notifications
+Apps and notifications
+Apps and notifications -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Battery
+Battery
+Battery -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Display
+Display
+Display -&gt; PASS
+Brightness level
+Brightness level
+Brightness level -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Night Light
+Night Light
+Night Light -&gt; PASS
+Navigate back
+Navigate Back
+Navigate back -&gt; PASS
+Screen timeout
+Screen timeout
+Screen timeout -&gt; PASS
+30 seconds
+30 seconds
+30 seconds -&gt; PASS
+Screen timeout
+Screen timeout
+Screen timeout -&gt; PASS
+5 minutes
+5 minutes
+5 minutes -&gt; PASS
+Screen timeout
+Screen timeout
+Screen timeout -&gt; PASS
+10 minutes
+10 minutes
+10 minutes -&gt; PASS
+Screen timeout
+Screen timeout
+Screen timeout -&gt; PASS
+30 minutes
+30 minutes
+30 minutes -&gt; PASS
+Screen timeout
+Screen timeout
+Screen timeout -&gt; PASS
+CANCEL
+CANCEL
+CANCEL -&gt; PASS
+Page Down
+Page Down
+Page Down -&gt; PASS
+Advanced
+Advanced
+Advanced -&gt; PASS
+Font size
+Font size
+Font size -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Sound
+Sound
+Sound -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Page down
+Page Down
+Page down -&gt; PASS
+Storage
+Storage
+Storage -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Privacy
+Privacy
+Privacy -&gt; PASS
+Accessibility usage
+Accessibility usage
+Accessibility usage -&gt; PASS
+ok
+OK
+ok -&gt; PASS
+Permission manager
+Permission manager
+Permission manager -&gt; PASS
+navigate back
+Navigate Back
+navigate back -&gt; PASS
+Show passwords
+Show passwords
+Show passwords -&gt; PASS
+Show passwords
+Show passwords
+Show passwords -&gt; PASS
+Lock screen
+Lock screen
+Lock screen -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Location
+Location
+Location -&gt; PASS
+Use Location
+Use location
+Use Location -&gt; PASS
+Use Location
+Use location
+Use Location -&gt; PASS
+Navigate back
+Navigate Back
+Navigate back -&gt; PASS
+Security
+Security
+Security -&gt; PASS
+Navigate back
+Navigate Back
+Navigate back -&gt; PASS
+Accounts
+Accounts
+Accounts -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Accessibility
+Accessibility
+Accessibility -&gt; PASS
+Navigate back
+Navigate Back
+Navigate back -&gt; PASS
+Select item 7
+Select Item 7
+Select item 7 -&gt; PASS
+Bluetooth Mode
+Bluetooth Mode
+Bluetooth Mode -&gt; PASS
+Bluetooth Mode
+Bluetooth Mode
+Bluetooth Mode -&gt; PASS
+Storage Mode
+Storage Mode
+Storage Mode -&gt; PASS
+Storage Mode
+Storage Mode
+Storage Mode -&gt; PASS
+CameraLow light
+CameraLow Light
+CameraLow light -&gt; PASS
+CameraLow light
+CameraLow Light
+CameraLow light -&gt; PASS
+CameraField of View
+CameraField of View
+CameraField of View -&gt; PASS
+CameraField of View
+CameraField of View
+CameraField of View -&gt; PASS
+CameraImage Stabilization
+CameraImage Stabilization
+CameraImage Stabilization -&gt; PASS
+CameraImage Stabilization
+CameraImage Stabilization
+CameraImage Stabilization -&gt; PASS
+Navigate Back
+Navigate Back
+Navigate Back -&gt; PASS
+Page down
+Page Down
+Page down -&gt; PASS
+System
+System
+System -&gt; PASS
+Navigate back
+Navigate Back
+Navigate back -&gt; PASS
+About Device
+About device
+About Device -&gt; PASS
+Device name
+Device name
+Device name -&gt; PASS
+navigate Back
+Navigate Back
+navigate Back -&gt; PASS
+Ok
+OK
+Ok -&gt; PASS
+Cancel
+CANCEL
+Cancel -&gt; PASS
+Emergency information
+Emergency information
+Emergency information -&gt; PASS
+navigate Back
+Navigate Back
+navigate Back -&gt; PASS
+Model
+Model
+Model -&gt; PASS
+navigate Back
+Navigate Back
+navigate Back -&gt; PASS
+Page Down
+Page Down
+Page Down -&gt; PASS
+Android version
+Android version
+Android version -&gt; PASS
+Navigate back
+Navigate Back
+Navigate back -&gt; PASS
+Page Down
+Page Down
+Page Down -&gt; PASS
+Build number
+Build number
+Build number -&gt; PASS
+Navigate back
+Navigate Back
+Navigate back -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">GlobalCommands/test_GlobalCommands.py::test_GlobalCommands</td>
+          <td class="col-duration">700.80</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Navigate Home -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+About Device -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Audio Recorder -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Barcode Reader -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Cloud sync -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Configuration -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+My Camera -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+My Files -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Settings -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Tetrominos -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Web Apps -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Wireless Update -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Home -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">WebApps/test_WebApps.py::test_WebApps</td>
+          <td class="col-duration">278.27</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Web Apps -&gt; PASS
+Youtube -&gt; PASS
+Refresh Page -&gt; PASS
+More Options -&gt; PASS
+Mouse -&gt; PASS
+Scan code -&gt; PASS
+Navigate Back -&gt; PASS
+Add to Bookmarks -&gt; PASS
+Cancel -&gt; PASS
+Add to Bookmarks -&gt; PASS
+Save Bookmark -&gt; PASS
+Hide Options -&gt; PASS
+Navigate back -&gt; PASS
+Realwear -&gt; PASS
+Refresh Page -&gt; PASS
+More Options -&gt; PASS
+Mouse -&gt; PASS
+Hide Options -&gt; PASS
+Select item 3 -&gt; PASS
+More Options -&gt; PASS
+Scan code -&gt; PASS
+Navigate Back -&gt; PASS
+Add to Bookmarks -&gt; PASS
+Cancel -&gt; PASS
+Add to Bookmarks -&gt; PASS
+Save Bookmark -&gt; PASS
+Hide Options -&gt; PASS
+Navigate Back -&gt; PASS
+Google -&gt; PASS
+Refresh Page -&gt; PASS
+More Options -&gt; PASS
+Mouse -&gt; PASS
+Scan code -&gt; PASS
+Navigate Back -&gt; PASS
+Add to Bookmarks -&gt; PASS
+Cancel -&gt; PASS
+Add to Bookmarks -&gt; PASS
+Save Bookmark -&gt; PASS
+Hide Options -&gt; PASS
+Recent Applications -&gt; PASS
+Dismiss All -&gt; PASS
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">WirelessUpdate/test_WirelessUpdate.py::test_WirelessUpdate</td>
+          <td class="col-duration">187.27</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Navigate Home -&gt; PASS
+My Programs -&gt; PASS
+Wireless Update -&gt; PASS
+Select Item 2 -&gt; PASS
+Local Updates -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Back -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+Navigate Back -&gt; PASS
+Select Item 2 -&gt; PASS
+Settings -&gt; PASS
+Show Help -&gt; PASS
+Hide Help -&gt; PASS
+Recent Applications -&gt; PASS
+Navigate Back -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Show Notifications -&gt; PASS
+Hide Notifications -&gt; PASS
+Navigate Back -&gt; PASS
+Check for updates -&gt; PASS
+My Controls -&gt; PASS
+Navigate Back -&gt; PASS
+Select Item 2 -&gt; PASS
+Exit -&gt; PASS
+<br/></div></td></tr></tbody></table></body></html>
